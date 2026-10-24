@@ -1,0 +1,105 @@
+﻿Status;Prüftiefe;Film;Pfad;Verzeichnis;Bibliothek;Größe (Byte);Größe;Dauer;Container;Videoformat;Auflösung;Audio;Letzte Prüfung;Fehler;Warnungen;Vorhanden;Hinweis;Schweregrad;Fehlertyp;Heuristisch;Methode;Stream;Streamtyp;Zeitpunkt;Zeitgenauigkeit;Zeit von (s);Zeit bis (s);Byte-Offset;Werkzeug;Anzahl;Beschreibung;Originalmeldung
+Fehler;Container + vollständige Decodierung;Kikis kleiner Lieferservice (1989).mkv;/media/Filme/Animation/Kikis kleiner Lieferservice (1989).mkv;Filme/Animation;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:22;2;1;ja;;Fehler;Matroska-Strukturfehler;nein;Erweiterte Containerprüfung;;;00:00:07.960 – 00:00:09.920;Bereich (zwischen gemessenen Zeitstempeln);7.96;9.92;852153;ebml-validator;1;Unbekanntes oder zerstörtes Element 0xDE auf Segmentebene bei Byte 852153. 204075 Byte bis zum nächsten gültigen Element (Byte 1056228) übersprungen.;"[mkvmerge (Volldurchlauf)] #GUI#warning /media/Filme/Animation/Kikis kleiner Lieferservice (1989).mkv: Error in the Matroska file structure at position 852153. Resyncing to the next level 1 element.
+#GUI#warning Resyncing successful at position 1056228.
+#GUI#warning The first cluster timestamp after the resync is 00:00:09.920000000.
+#GUI#warning The last timestamp processed before the error was encountered was 00:00:07.914000000."
+Fehler;Container + vollständige Decodierung;Kikis kleiner Lieferservice (1989).mkv;/media/Filme/Animation/Kikis kleiner Lieferservice (1989).mkv;Filme/Animation;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:22;2;1;ja;;Warnung;Fehlerhafter Index (Cues/SeekHead);ja;Erweiterte Containerprüfung;;;00:00:08;exakt (Container-/Paketzeitstempel);8.0;;;ebml-validator;1;1 von 10 Indexeinträgen (Cues) verweisen nicht auf einen Clusteranfang. Spulen kann an diesen Stellen fehlschlagen oder an eine falsche Stelle springen.;
+Fehler;Container + vollständige Decodierung;Kikis kleiner Lieferservice (1989).mkv;/media/Filme/Animation/Kikis kleiner Lieferservice (1989).mkv;Filme/Animation;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:22;2;1;ja;;Fehler;Matroska-Strukturfehler;nein;Vollständige Prüfung;;;00:00:05.930 – 00:00:09.920;Bereich (zwischen gemessenen Zeitstempeln);5.93;9.92;852422;ffmpeg (Decodierung);1;Ein Matroska-Element reicht über sein übergeordnetes Element hinaus (zerstörte Struktur).;[matroska,webm @ 0x5572b2068500] [error] Element at 0xd01c6 ending at 0xbeacfe7 exceeds containing master element ending at 0x20958a
+Kritisch;Container + vollständige Decodierung;Das Boot (1981) – Director's Cut.mkv;/media/Filme/Klassiker/Das Boot (1981) – Director's Cut.mkv;Filme/Klassiker;Filme;1281260;1,28 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:22;2;1;ja;;Kritisch;Datei abgeschnitten / vorzeitiges Dateiende;nein;Erweiterte Containerprüfung;;;00:00:12 – 00:00:20.021;Bereich (zwischen gemessenen Zeitstempeln);12.0;20.021;1272541;ebml-validator;1;Die Datei ist kürzer als im Segment angegeben – sie wurde vermutlich unvollständig kopiert oder heruntergeladen. Es fehlen 854174 Byte (40.0 %). Der Cluster bei Byte 1272541 (Zeit 11.925 s) ist unvollständig.;
+Kritisch;Container + vollständige Decodierung;Das Boot (1981) – Director's Cut.mkv;/media/Filme/Klassiker/Das Boot (1981) – Director's Cut.mkv;Filme/Klassiker;Filme;1281260;1,28 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:22;2;1;ja;;Warnung;Laufzeitabweichung;ja;Erweiterte Containerprüfung;;;00:00:12 – 00:00:20.021;Bereich (zwischen gemessenen Zeitstempeln);12.0;20.021;;ebml-validator;1;Laufzeit laut Segment-Info 20.0 s, letzte Blockdaten bei 12.0 s (Abweichung +8.0 s). Ursache ist das abgeschnittene Dateiende.;
+Kritisch;Container + vollständige Decodierung;Das Boot (1981) – Director's Cut.mkv;/media/Filme/Klassiker/Das Boot (1981) – Director's Cut.mkv;Filme/Klassiker;Filme;1281260;1,28 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:22;2;1;ja;;Kritisch;Datei abgeschnitten / vorzeitiges Dateiende;nein;Vollständige Prüfung;;;00:00:12 – 00:00:20.021;Bereich (zwischen gemessenen Zeitstempeln);12.0;20.021;;ffmpeg (Decodierung);1;Vorzeitiges Dateiende – die Datei ist abgeschnitten oder ein Element reicht über das Dateiende hinaus.;[matroska,webm @ 0x55b8d89c8500] [error] File ended prematurely
+Fehler;Container + vollständige Decodierung;Lola rennt (1998).mkv;/media/Filme/Klassiker/Lola rennt (1998).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:23;3;5;ja;;Warnung;Lücke im Stream;ja;Erweiterte Containerprüfung;1;audio;00:00:11.904 – 00:01:05.535;exakt (Container-/Paketzeitstempel);11.904;65.535;1272558;ebml-validator;1;Lücke von 53.6 s in Spur 2 (audio) zwischen 11.904 s und 65.535 s.;
+Fehler;Container + vollständige Decodierung;Lola rennt (1998).mkv;/media/Filme/Klassiker/Lola rennt (1998).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:23;3;5;ja;;Warnung;Lücke im Stream;ja;Erweiterte Containerprüfung;0;video;00:00:11.960 – 00:01:05.610;exakt (Container-/Paketzeitstempel);11.96;65.61;1272916;ebml-validator;1;Lücke von 53.6 s in Spur 1 (video) zwischen 11.960 s und 65.610 s.;
+Fehler;Container + vollständige Decodierung;Lola rennt (1998).mkv;/media/Filme/Klassiker/Lola rennt (1998).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:23;3;5;ja;;Fehler;Zeitstempelsprung;nein;Erweiterte Containerprüfung;;;00:00:12 – 00:01:05.535;exakt (Container-/Paketzeitstempel);12.0;65.535;1272541;ebml-validator;1;Zeitstempelsprung um 53.5 s (von 12.000 s auf 65.535 s). Player springen an dieser Stelle typischerweise weiter oder ans Ende.;
+Fehler;Container + vollständige Decodierung;Lola rennt (1998).mkv;/media/Filme/Klassiker/Lola rennt (1998).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:23;3;5;ja;;Fehler;Zeitstempel läuft rückwärts;nein;Erweiterte Containerprüfung;;;00:00:13.930 – 00:01:05.535;exakt (Container-/Paketzeitstempel);13.93;65.535;1473376;ebml-validator;1;Clusterzeitstempel springt rückwärts von 65.535 s auf 13.930 s.;
+Fehler;Container + vollständige Decodierung;Lola rennt (1998).mkv;/media/Filme/Klassiker/Lola rennt (1998).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:23;3;5;ja;;Warnung;Zeitstempel läuft rückwärts;ja;Erweiterte Containerprüfung;1;audio;00:00:13.930 – 00:01:07.519;exakt (Container-/Paketzeitstempel);13.93;67.519;1473393;ebml-validator;1;Audiozeitstempel der Spur 2 laufen rückwärts.;
+Fehler;Container + vollständige Decodierung;Lola rennt (1998).mkv;/media/Filme/Klassiker/Lola rennt (1998).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:23;3;5;ja;;Fehler;CRC-Prüfsumme eines Clusters falsch;nein;Erweiterte Containerprüfung;;;00:01:05.535 – 00:01:07.570;Bereich (zwischen gemessenen Zeitstempeln);65.535;67.57;1272541;ebml-validator;1;Die CRC-32-Prüfsumme des Clusters stimmt nicht – Clusterdaten sind verändert/beschädigt.;CRC erwartet 21061db4, berechnet 223f3588
+Fehler;Container + vollständige Decodierung;Lola rennt (1998).mkv;/media/Filme/Klassiker/Lola rennt (1998).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:23;3;5;ja;;Warnung;Laufzeitabweichung;ja;Erweiterte Containerprüfung;;;Position nicht bestimmbar;nicht bestimmbar;;;;ebml-validator;1;Laufzeit laut Segment-Info 20.0 s, letzte Blockdaten bei 67.6 s (Abweichung -47.6 s).;
+Fehler;Container + vollständige Decodierung;Lola rennt (1998).mkv;/media/Filme/Klassiker/Lola rennt (1998).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:23;3;5;ja;;Warnung;Fehlerhafte Zeitstempel;ja;Vollständige Prüfung;;;ca. 00:00:00 – 00:00:21.010;ungefähr (Decoderfortschritt);0.0;21.010167;;ffmpeg (Decodierung);436;Auffällige oder fehlerhafte Zeitstempel.;"[null @ 0x5575fc932c40] [error] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 3240912 >= 668640
+[null @ 0x5575fc932c40] [error] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 3240912 >= 669672
+[null @ 0x5575fc932c40] [error] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 3240912 >= 670696
+[null @ 0x5575fc932c40] [error] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 3240912 >= 671720
+[null @ 0x5575fc932c40] [error] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 3240912 >= 672744
+[null @ 0x5575fc932c40] [error] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 3240912 >= 673768
+[null @ 0x5575fc932c40] [error] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 3240912 >= 674792
+[null @ 0x5575fc932c40] [error] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 1690 >= 351
+… insgesamt 436 Meldungen"
+Fehler;Container + vollständige Decodierung;Metropolis (1927).mkv;/media/Filme/Klassiker/Metropolis (1927).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:24;5;0;ja;;Fehler;Beschädigter Cluster;nein;Erweiterte Containerprüfung;;;00:00:15.120 – 00:00:15.936;Bereich (zwischen gemessenen Zeitstempeln);15.12;15.936;1609386;ebml-validator;1;Unbekanntes oder zerstörtes Element 0x5CBE im Cluster bei Byte 1609386. Der Rest des Clusters (92222 Byte) ist nicht verwertbar.;
+Fehler;Container + vollständige Decodierung;Metropolis (1927).mkv;/media/Filme/Klassiker/Metropolis (1927).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:24;5;0;ja;;Fehler;Videodecodierungsfehler;nein;Vollständige Prüfung;0;video;ca. 00:00:00 – 00:00:21.011;ungefähr (Decoderfortschritt);0.0;21.0105;;ffmpeg (Decodierung);7;Fehler beim Decodieren des Videostreams.;"[h264 @ 0x55dffe0cc6c0] [error] cabac decode of qscale diff failed at 9 12
+[h264 @ 0x55dffe0cc6c0] [error] error while decoding MB 9 12, bytestream 7872
+[h264 @ 0x55dffe0cc6c0] [error] cabac decode of qscale diff failed at 30 15
+[h264 @ 0x55dffe0cc6c0] [error] error while decoding MB 30 15, bytestream 1352
+[h264 @ 0x55dffe086400] [error] cabac decode of qscale diff failed at 11 15
+[h264 @ 0x55dffe086400] [error] error while decoding MB 11 15, bytestream 2284
+[h264 @ 0x55dffe0cc6c0] [error] error while decoding MB 35 19, bytestream -25"
+Fehler;Container + vollständige Decodierung;Metropolis (1927).mkv;/media/Filme/Klassiker/Metropolis (1927).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:24;5;0;ja;;Fehler;Beschädigter Videoframe;nein;Vollständige Prüfung;0;video;ca. 00:00:00 – 00:00:21.011;ungefähr (Decoderfortschritt);0.0;21.0105;;ffmpeg (Decodierung);17;Der Decoder hat einen beschädigten Videoframe ausgegeben.;"[vist#0:0/h264 @ 0x55dffe0aca80] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x55dffe0aca80] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x55dffe0aca80] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x55dffe0aca80] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x55dffe0aca80] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x55dffe0aca80] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x55dffe0aca80] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x55dffe0aca80] [warning] corrupt decoded frame
+… insgesamt 17 Meldungen"
+Fehler;Container + vollständige Decodierung;Metropolis (1927).mkv;/media/Filme/Klassiker/Metropolis (1927).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:24;5;0;ja;;Fehler;Audiodecodierungsfehler;nein;Vollständige Prüfung;1;audio;ca. 00:00:00 – 00:00:21.011;ungefähr (Decoderfortschritt);0.0;21.0105;;ffmpeg (Decodierung);2;Fehler beim Decodieren des Audiostreams.;"[aac @ 0x55dffdfe6900] [error] skip_data_stream_element: Input buffer exhausted before END element found
+[aist#0:1/aac @ 0x55dffe0310c0] [error] Error submitting packet to decoder: Invalid data found when processing input"
+Fehler;Container + vollständige Decodierung;Metropolis (1927).mkv;/media/Filme/Klassiker/Metropolis (1927).mkv;Filme/Klassiker;Filme;2135434;2,14 MB;00:00:20.021;Matroska / WebM;h264;640x360;aac;24.10.2026 08:39:24;5;0;ja;;Fehler;Fehlerhafte EBML-Struktur;nein;Vollständige Prüfung;;;00:00:13.930 – 00:00:15.936;Bereich (zwischen gemessenen Zeitstempeln);13.93;15.936;1609441;ffmpeg (Decodierung);1;Ungültige EBML-Längenangabe – die Containerstruktur ist an dieser Stelle zerstört.;[matroska,webm @ 0x55dffdfdf500] [error] Length 5 indicated by an EBML number's first byte 0x08 at pos 1609441 (0x188ee1) exceeds max length 4.
+Fehler;Container + vollständige Decodierung;Tatort – Folge 1 (TV-Aufnahme).ts;/media/Serien/Staffel 1/Tatort – Folge 1 (TV-Aufnahme).ts;Serien/Staffel 1;Filme;2328192;2,33 MB;00:00:20.021;MPEG-TS (MPEG-2 Transport Stream);h264;640x360;aac;24.10.2026 08:39:25;7;0;ja;;Fehler;Beschädigtes oder nicht lesbares Medienpaket;nein;Schnellprüfung;0;video;00:00:02.581 – 00:00:04.661;Bereich (zwischen gemessenen Zeitstempeln);2.581;4.661;;ffprobe;6;Beschädigtes Medienpaket (vom Demuxer erkannt).;"[mpegts @ 0x55c6824536c0] [warning] Packet corrupt (stream = 0, dts = 363600).
+[mpegts @ 0x55c6824536c0] [warning] Packet corrupt (stream = 0, dts = 396000).
+[mpegts @ 0x55c6824536c0] [warning] Packet corrupt (stream = 0, dts = 435600).
+[mpegts @ 0x55c6824536c0] [warning] Packet corrupt (stream = 0, dts = 471600).
+[mpegts @ 0x55c6824536c0] [warning] Packet corrupt (stream = 0, dts = 507600).
+[mpegts @ 0x55c6824536c0] [warning] Packet corrupt (stream = 0, dts = 550800)."
+Fehler;Container + vollständige Decodierung;Tatort – Folge 1 (TV-Aufnahme).ts;/media/Serien/Staffel 1/Tatort – Folge 1 (TV-Aufnahme).ts;Serien/Staffel 1;Filme;2328192;2,33 MB;00:00:20.021;MPEG-TS (MPEG-2 Transport Stream);h264;640x360;aac;24.10.2026 08:39:25;7;0;ja;;Fehler;Beschädigtes oder nicht lesbares Medienpaket;nein;Erweiterte Containerprüfung;0;video;ca. 00:00:00 – 00:00:21.011;ungefähr (Decoderfortschritt);0.0;21.0105;;ffmpeg (Demux);10;Beschädigtes Eingangspaket.;"[in#0/mpegts @ 0x55ff898ff400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x55ff898ff400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x55ff898ff400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x55ff898ff400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x55ff898ff400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x55ff898ff400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x55ff898ff400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x55ff898ff400] [warning] corrupt input packet in stream 0
+… insgesamt 10 Meldungen"
+Fehler;Container + vollständige Decodierung;Tatort – Folge 1 (TV-Aufnahme).ts;/media/Serien/Staffel 1/Tatort – Folge 1 (TV-Aufnahme).ts;Serien/Staffel 1;Filme;2328192;2,33 MB;00:00:20.021;MPEG-TS (MPEG-2 Transport Stream);h264;640x360;aac;24.10.2026 08:39:25;7;0;ja;;Fehler;Beschädigtes oder nicht lesbares Medienpaket;nein;Erweiterte Containerprüfung;0;video;00:00:02.581 – 00:00:06.381;Bereich (zwischen gemessenen Zeitstempeln);2.581;6.381;;ffmpeg (Demux);16;Beschädigtes Medienpaket (vom Demuxer erkannt).;"[mpegts @ 0x55ff898ff500] [warning] Packet corrupt (stream = 0, dts = 363600).
+[mpegts @ 0x55ff898ff500] [warning] Packet corrupt (stream = 0, dts = 396000).
+[mpegts @ 0x55ff898ff500] [warning] Packet corrupt (stream = 0, dts = 435600).
+[mpegts @ 0x55ff898ff500] [warning] Packet corrupt (stream = 0, dts = 471600).
+[mpegts @ 0x55ff898ff500] [warning] Packet corrupt (stream = 0, dts = 507600).
+[mpegts @ 0x55ff898ff500] [warning] Packet corrupt (stream = 0, dts = 550800).
+[mpegts @ 0x55ff898ff500] [warning] Packet corrupt (stream = 0, dts = 363600).
+[mpegts @ 0x55ff898ff500] [warning] Packet corrupt (stream = 0, dts = 396000).
+… insgesamt 16 Meldungen"
+Fehler;Container + vollständige Decodierung;Tatort – Folge 1 (TV-Aufnahme).ts;/media/Serien/Staffel 1/Tatort – Folge 1 (TV-Aufnahme).ts;Serien/Staffel 1;Filme;2328192;2,33 MB;00:00:20.021;MPEG-TS (MPEG-2 Transport Stream);h264;640x360;aac;24.10.2026 08:39:25;7;0;ja;;Fehler;Beschädigtes oder nicht lesbares Medienpaket;nein;Vollständige Prüfung;0;video;ca. 00:00:00 – 00:00:21.011;ungefähr (Decoderfortschritt);0.0;21.0105;;ffmpeg (Decodierung);10;Beschädigtes Eingangspaket.;"[in#0/mpegts @ 0x561b35292400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x561b35292400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x561b35292400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x561b35292400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x561b35292400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x561b35292400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x561b35292400] [warning] corrupt input packet in stream 0
+[in#0/mpegts @ 0x561b35292400] [warning] corrupt input packet in stream 0
+… insgesamt 10 Meldungen"
+Fehler;Container + vollständige Decodierung;Tatort – Folge 1 (TV-Aufnahme).ts;/media/Serien/Staffel 1/Tatort – Folge 1 (TV-Aufnahme).ts;Serien/Staffel 1;Filme;2328192;2,33 MB;00:00:20.021;MPEG-TS (MPEG-2 Transport Stream);h264;640x360;aac;24.10.2026 08:39:25;7;0;ja;;Fehler;Videodecodierungsfehler;nein;Vollständige Prüfung;0;video;ca. 00:00:00 – 00:00:21.011;ungefähr (Decoderfortschritt);0.0;21.0105;;ffmpeg (Decodierung);12;Fehler beim Decodieren des Videostreams.;"[h264 @ 0x561b3544e880] [error] cabac decode of qscale diff failed at 1 16
+[h264 @ 0x561b3544e880] [error] error while decoding MB 1 16, bytestream 754
+[h264 @ 0x561b353028c0] [error] cabac decode of qscale diff failed at 4 17
+[h264 @ 0x561b353028c0] [error] error while decoding MB 4 17, bytestream 862
+[h264 @ 0x561b3544e880] [error] reference picture missing during reorder
+[h264 @ 0x561b3544e880] [error] Missing reference picture, default is 65612
+[h264 @ 0x561b3544e880] [error] mmco: unref short failure
+[h264 @ 0x561b353028c0] [error] cabac decode of qscale diff failed at 12 18
+… insgesamt 12 Meldungen"
+Fehler;Container + vollständige Decodierung;Tatort – Folge 1 (TV-Aufnahme).ts;/media/Serien/Staffel 1/Tatort – Folge 1 (TV-Aufnahme).ts;Serien/Staffel 1;Filme;2328192;2,33 MB;00:00:20.021;MPEG-TS (MPEG-2 Transport Stream);h264;640x360;aac;24.10.2026 08:39:25;7;0;ja;;Fehler;Beschädigter Videoframe;nein;Vollständige Prüfung;0;video;ca. 00:00:00 – 00:00:21.011;ungefähr (Decoderfortschritt);0.0;21.0105;;ffmpeg (Decodierung);8;Der Decoder hat einen beschädigten Videoframe ausgegeben.;"[vist#0:0/h264 @ 0x561b3529a100] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x561b3529a100] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x561b3529a100] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x561b3529a100] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x561b3529a100] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x561b3529a100] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x561b3529a100] [warning] corrupt decoded frame
+[vist#0:0/h264 @ 0x561b3529a100] [warning] corrupt decoded frame"
+Fehler;Container + vollständige Decodierung;Tatort – Folge 1 (TV-Aufnahme).ts;/media/Serien/Staffel 1/Tatort – Folge 1 (TV-Aufnahme).ts;Serien/Staffel 1;Filme;2328192;2,33 MB;00:00:20.021;MPEG-TS (MPEG-2 Transport Stream);h264;640x360;aac;24.10.2026 08:39:25;7;0;ja;;Fehler;Beschädigtes oder nicht lesbares Medienpaket;nein;Vollständige Prüfung;0;video;00:00:02.581 – 00:00:06.381;Bereich (zwischen gemessenen Zeitstempeln);2.581;6.381;;ffmpeg (Decodierung);16;Beschädigtes Medienpaket (vom Demuxer erkannt).;"[mpegts @ 0x561b35292500] [warning] Packet corrupt (stream = 0, dts = 363600).
+[mpegts @ 0x561b35292500] [warning] Packet corrupt (stream = 0, dts = 396000).
+[mpegts @ 0x561b35292500] [warning] Packet corrupt (stream = 0, dts = 435600).
+[mpegts @ 0x561b35292500] [warning] Packet corrupt (stream = 0, dts = 471600).
+[mpegts @ 0x561b35292500] [warning] Packet corrupt (stream = 0, dts = 507600).
+[mpegts @ 0x561b35292500] [warning] Packet corrupt (stream = 0, dts = 550800).
+[mpegts @ 0x561b35292500] [warning] Packet corrupt (stream = 0, dts = 363600).
+[mpegts @ 0x561b35292500] [warning] Packet corrupt (stream = 0, dts = 396000).
+… insgesamt 16 Meldungen"

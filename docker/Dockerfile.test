@@ -1,0 +1,19 @@
+# Testimage: führt die automatisierten Tests im fertigen Laufzeit-Image als Nicht-root-Benutzer aus.
+#   docker build -t media-integrity-scanner:latest .
+#   docker build -f docker/Dockerfile.test -t media-integrity-scanner:test .
+#   docker run --rm media-integrity-scanner:test
+ARG BASE_IMAGE=media-integrity-scanner:latest
+FROM ${BASE_IMAGE}
+COPY backend/requirements-dev.txt /app/requirements-dev.txt
+RUN --mount=type=secret,id=ca_cert,required=false,mode=0444 \
+    if [ -f /run/secrets/ca_cert ]; then export PIP_CERT=/run/secrets/ca_cert; fi \
+ && pip install -r /app/requirements-dev.txt
+WORKDIR /src
+COPY pytest.ini /src/pytest.ini
+COPY tests /src/tests
+RUN mkdir -p /src/backend && ln -s /app/app /src/backend/app && cp /app/alembic.ini /src/backend/ \
+ && chown -R app:app /src
+USER app
+ENV HOME=/tmp
+ENTRYPOINT []
+CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:logging"]

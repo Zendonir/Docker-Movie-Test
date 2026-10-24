@@ -1,0 +1,39 @@
+# Media Integrity Scanner – Docker Compose (auch als TrueNAS-SCALE-Custom-App verwendbar)
+# Pfade unter "volumes" an die eigenen Datasets anpassen.
+services:
+  media-integrity-scanner:
+    build: .
+    image: media-integrity-scanner:latest
+    container_name: media-integrity-scanner
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: Europe/Berlin
+      PUID: "3000"
+      PGID: "3000"
+      MAX_CONCURRENT_SCANS: "1"
+      # optional:
+      # SUPPLEMENTARY_GROUPS: "568"     # zusätzliche Gruppen mit Leserecht (z. B. "apps")
+      # FFMPEG_THREADS: "2"
+      # NICE_LEVEL: "10"
+      # IO_PRIORITY: "best-effort-low"  # idle | best-effort-low | best-effort | normal
+      # AUTH_ENABLED: "true"
+      # AUTH_USERNAME: "admin"
+      # AUTH_PASSWORD: "bitte-aendern"
+    volumes:
+      - /mnt/tank/Filme:/media:ro
+      - /mnt/tank/appdata/media-integrity:/config
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

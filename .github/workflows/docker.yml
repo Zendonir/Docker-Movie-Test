@@ -1,0 +1,47 @@
+name: Build und Test
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image bauen (amd64)
+        run: docker build -t media-integrity-scanner:latest .
+      - name: Tests im Image als Nicht-root
+        run: |
+          docker build -f docker/Dockerfile.test -t media-integrity-scanner:test .
+          docker run --rm media-integrity-scanner:test
+      - name: Smoke-Test mit /media:ro
+        run: scripts/docker-smoke-test.sh media-integrity-scanner:latest
+
+  multiarch:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Anmeldung GHCR (nur Tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build linux/amd64 + linux/arm64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: ghcr.io/${{ github.repository_owner }}/media-integrity-scanner:${{ github.ref_name }}
