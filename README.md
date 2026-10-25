@@ -29,12 +29,13 @@ bereits vollständig geprüft wurden**.
 4. [Prüfverfahren](#4-prüfverfahren)
 5. [Fehlerklassen und Zeitangaben](#5-fehlerklassen-und-zeitangaben)
 6. [Bedienung](#6-bedienung)
-7. [Bekannte Einschränkungen](#7-bekannte-einschränkungen)
-8. [Architektur](#8-architektur)
-9. [Tests](#9-tests)
-10. [Image bauen und aktualisieren](#10-image-bauen-und-aktualisieren)
-11. [Abhängigkeiten](#11-abhängigkeiten)
-12. [Sicherheit](#12-sicherheit)
+7. [MKV-Optimizer](#7-mkv-optimizer)
+8. [Bekannte Einschränkungen](#8-bekannte-einschränkungen)
+9. [Architektur](#9-architektur)
+10. [Tests](#10-tests)
+11. [Image bauen und aktualisieren](#11-image-bauen-und-aktualisieren)
+12. [Abhängigkeiten](#12-abhängigkeiten)
+13. [Sicherheit](#13-sicherheit)
 
 ---
 
@@ -59,6 +60,7 @@ Getestet ist das Image mit Docker 29; TrueNAS SCALE ab 24.10 („Electric Eel“
 
 1. **Medien-Dataset** (z. B. `tank/Filme`) – existiert bereits. Der Scanner braucht nur **Leserechte**.
 2. **App-Dataset** für Konfiguration und Datenbank anlegen, z. B. `tank/appdata/media-integrity`.
+   Für den MKV-Optimizer zusätzlich ein Ziel-Dataset, z. B. `tank/Filme-optimiert` (Lesen/Schreiben für PUID/PGID).
 3. Benutzer festlegen, unter dem der Scanner läuft (PUID/PGID). Empfehlung: einen eigenen Benutzer
    `mediascan` (z. B. UID/GID 3000) anlegen und ihm auf dem Medien-Dataset **Lesen** und auf dem App-Dataset
    **Lesen/Schreiben** geben. Alternativ die vorhandene Gruppe `apps` (GID 568) über
@@ -69,7 +71,7 @@ Getestet ist das Image mit Docker 29; TrueNAS SCALE ab 24.10 („Electric Eel“
 TrueNAS kann das Image nicht selbst aus diesem Quellcode bauen. Zwei Wege:
 
 * **Eigene Registry** (empfohlen): auf einem Rechner mit Docker bauen und in eine Registry (z. B. GHCR oder
-  eine lokale Registry) pushen – siehe [Abschnitt 10](#10-image-bauen-und-aktualisieren). In TrueNAS dann
+  eine lokale Registry) pushen – siehe [Abschnitt 11](#11-image-bauen-und-aktualisieren). In TrueNAS dann
   `image: ghcr.io/<konto>/media-integrity-scanner:1.0.0` verwenden.
 * **Direkt auf TrueNAS bauen**: per SSH auf dem NAS (`sudo -i`):
   ```bash
@@ -97,6 +99,7 @@ services:
     volumes:
       - /mnt/tank/Filme:/media:ro
       - /mnt/tank/appdata/media-integrity:/config
+      - /mnt/tank/Filme-optimiert:/output       # nur für den MKV-Optimizer
     stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
@@ -137,8 +140,9 @@ und in der Oberfläche unter **Bibliotheken** als eigene Bibliothek hinzufügen.
 | `CONFIG_DIR` | `/config` | Datenbank, Logs, Schlüssel |
 | `AUTO_CREATE_LIBRARY` | `true` | Beim ersten Start Bibliothek für die Medienwurzel anlegen |
 | `AUTH_ENABLED`, `AUTH_USERNAME`, `AUTH_PASSWORD` | – | Optionale Anmeldung (hat Vorrang vor der Oberfläche) |
-| `REPAIR_ENABLED` | `false` | Vorbereitete Reparaturfunktion freischalten (siehe 12) |
+| `REPAIR_ENABLED` | `false` | Vorbereitete Reparaturfunktion freischalten (siehe 13) |
 | `SCAN_TMP_DIR` | `/config/tmp` | Temporärer Speicher für den optionalen Diagnose-Remux |
+| `OPTIMIZER_OUTPUT_DIR` | `/output` | Ausgabeverzeichnis des MKV-Optimizers (Volume einbinden) |
 | `PORT` | `8080` | Port im Container |
 | `LOG_LEVEL` | `INFO` | Protokollstufe |
 
@@ -216,7 +220,7 @@ Speicher), Vergleich der Laufzeit, anschließend Löschung. Das Original wird ni
 Für MP4/MOV/M4V/AVI/TS besteht Modus B aus dem FFmpeg-Demux-Durchlauf (u. a. fehlendes `moov`-Atom, „partial
 file“, Paketfehler mit DTS, Kontinuitätsfehler).
 
-**Grenzen:** siehe [Abschnitt 7](#7-bekannte-einschränkungen).
+**Grenzen:** siehe [Abschnitt 8](#8-bekannte-einschränkungen).
 
 ### Modus C – Vollständige Prüfung (Decodierung)
 
@@ -308,7 +312,99 @@ Ein **nicht unterstützter Codec** ist ausdrücklich kein Defekt (Status „Nich
   mit identischen Parametern; fällige Zeitpläne werden atomar genau einmal ausgelöst und verpasste Termine nach
   einem Neustart höchstens einmal nachgeholt.
 
-## 7. Bekannte Einschränkungen
+## 7. MKV-Optimizer
+
+Entfernt nicht benötigte Ton- und Untertitelspuren aus MKV-Dateien – automatisch nach Regeln – und
+konvertiert Tonspuren (z. B. DTS/TrueHD → AC3). Erreichbar über **MKV-Optimizer** in der Navigation.
+MKVToolNix und FFmpeg sind im Image enthalten, eine Pfadangabe ist nicht nötig.
+
+> Dieser Teil **schreibt Dateien**. Standardmäßig entstehen ausschließlich **neue Dateien im Ausgabeverzeichnis**
+> `/output`; Medien bleiben schreibgeschützt (`:ro`). Originale werden nur verändert, wenn das in den
+> Einstellungen ausdrücklich freigegeben und das Medienverzeichnis beschreibbar eingebunden ist.
+
+![MKV-Optimizer](docs/screenshots/optimizer.png)
+
+### 7.1 Spuren optimieren
+
+1. Bibliothek und Ordner wählen (Eingabe, „…“-Auswahldialog oder Pfad per Drag & Drop als Text), *Unterordner
+   durchsuchen* und *Nur Dateien mit mehr als einer Audiospur* sind voreingestellt.
+2. **Suchen**: Alle MKVs werden mit `mkvmerge -J` analysiert (Ergebnis wird je Dateiversion zwischengespeichert,
+   unveränderte Dateien werden beim nächsten Mal nicht erneut gelesen).
+3. **Regeln** für Audio und Untertitel:
+   * *Sprache*: „Spuren behalten mit folgender Sprache“ ist nach dem Suchen mit allen gefundenen Sprachen
+     belegt – nicht gewünschte einfach entfernen. Die Reihenfolge bestimmt die Spurreihenfolge in der neuen Datei.
+   * *Nur folgende Codecs übernehmen*: Gibt es mehrere Spuren derselben Sprache (z. B. GER AC3 und GER DTS),
+     bleiben nur die mit passendem Codec. Passt keine, bleiben alle Spuren dieser Sprache erhalten.
+   * *Track-ID*: feste mkvmerge-Track-IDs, durch Komma getrennt (z. B. `1, 3`).
+   * Leere Untertitelliste = alle Untertitel entfernen.
+4. Die Liste zeigt je Datei alle Spuren: grün = bleibt, rot durchgestrichen = wird entfernt, ★ = Standardspur.
+   **Doppelklick** auf eine Datei zeigt Spurtabelle, Begründung je Spur, Ziel und den exakten mkvmerge-Befehl
+   (Ersatz für das Öffnen der mkvmerge-GUI). **Rechtsklick** öffnet ein Kontextmenü zum Markieren.
+5. Dateien markieren → **Konvertieren**. mkvmerge schreibt ohne Neucodierung.
+
+Sicherheitsregeln: Eine Datei wird nie ohne Audiospur geschrieben; *geschützte Sprachen* (Standard: GER) werden
+nie vollständig entfernt; Dateien ohne Änderung werden nicht angefasst; wird die bisherige Standard-Audiospur
+entfernt, wird die erste verbleibende Spur Standard (abschaltbar).
+
+### 7.2 Audiokonvertierung
+
+Ordner wählen, **Profil** auswählen, **Suchen**, Dateien markieren, **Konvertieren**. Je Datei zeigt die Liste, welche
+Spur wohin umgewandelt wird. FFmpeg codiert nur die betroffenen Spuren in temporäre Dateien, anschließend setzt
+mkvmerge die MKV verlustfrei neu zusammen (Kapitel, Anhänge, Tags, Untertitel und Spurflags bleiben erhalten).
+Die konvertierte Spur steht an der Position der Originalspur (*ersetzen*) bzw. direkt dahinter (*zusätzlich*)
+und übernimmt Sprache und Standard-Flag.
+
+Vordefinierte Profile: DTS/TrueHD → AC3 5.1 640 kbit/s (ersetzen bzw. zusätzlich), DTS/TrueHD → E-AC3
+1024 kbit/s, FLAC/PCM → AC3 5.1, alle Spuren → AAC-Stereo-Downmix (zusätzlich). Eigene Profile:
+Zielcodec (AC3, E-AC3, AAC, FLAC, Opus, MP3), Bitrate, maximale Kanalzahl (Downmix), Abtastrate,
+Quellcodecs und -sprachen, Modus, Spurname (`{codec}`, `{channels}`, `{lang}`) und Dateiname der neuen Datei
+(`{name}`, `{codec}`, `{profile}`).
+
+### 7.3 Aufträge
+
+Jede Konvertierung läuft als Auftrag im Hintergrund (eine Datei gleichzeitig, niedrige CPU-/E/A-Priorität):
+Fortschritt und Restdauer **je Datei und gesamt**, eingesparter Speicher, Pausieren (sofort per SIGSTOP),
+Fortsetzen, Abbrechen, Protokoll je Datei mit den ausgeführten Befehlen. Nach einem Neustart werden temporäre
+Dateien gelöscht und der Auftrag fortgesetzt. Der Integritätsscanner prüft eine Datei nie, während der
+Optimizer sie bearbeitet; „Scanner pausieren“ hält auch den Optimizer an.
+
+### 7.4 Dateioperationen (MKV-Optimizer → Einstellungen)
+
+| Modus | Ergebnis | Voraussetzung |
+|---|---|---|
+| Neue Datei im Ausgabeverzeichnis (Standard) | `/output/<gleicher Pfad wie unter /media>` | Volume `/output` beschreibbar |
+| Neue Datei neben dem Original | `Film.optimiert.mkv` (Suffix einstellbar) bzw. Profil-Dateiname | `/media` beschreibbar |
+| Original ersetzen, Original sichern | Original wird nach `<Bibliothek>/.mis-originale/<Pfad>` verschoben | `/media` beschreibbar + Freigabe |
+| Original ersetzen und löschen | Original wird ersetzt | `/media` beschreibbar + Freigabe |
+
+Ablauf jeder Bearbeitung: Spuren neu einlesen (Plan wird mit den aktuellen Spuren berechnet) → in eine
+versteckte temporäre Datei im Zielordner schreiben → **prüfen** (Spuren und Codecs wie geplant, Laufzeit gleich,
+EBML-Strukturprüfung ohne Fehler) → erst dann abschließen. Neue Dateien überschreiben nie eine bestehende Datei
+(`Film (2).mkv`). Beim Ersetzen wird zusätzlich geprüft, ob sich das Original währenddessen verändert hat;
+das Ersetzen erfolgt per atomarem Umbenennen im selben Dateisystem. Dateien mit Integritätsfehlern werden
+standardmäßig übersprungen. Ersetzte Dateien werden in der Bibliothek als geändert markiert und beim nächsten
+inkrementellen Scan erneut geprüft.
+
+Weitere Optionen: Metadaten entfernen (globale Tags, Spur-Tags, Titel), Spuren nach Sprachreihenfolge
+neu sortieren, Standard-Audiospur setzen, geschützte Sprachen, Ergebnisprüfung, beschädigte Dateien überspringen.
+
+Compose-Beispiel für Ersetzen am Original (bewusst ohne `:ro`):
+
+```yaml
+    volumes:
+      - /mnt/tank/Filme:/media          # beschreibbar – nur wenn Originale ersetzt werden sollen
+      - /mnt/tank/appdata/media-integrity:/config
+```
+
+### 7.5 Unterschiede zum Windows-Programm „MKV Optimizer“
+
+* Weboberfläche statt Desktopprogramm; Ordner werden innerhalb der eingebundenen Bibliotheken gewählt
+  (Drag & Drop eines Ordners aus dem Dateimanager des eigenen PCs ist im Browser nicht möglich).
+* Statt die mkvmerge-GUI zu öffnen, zeigt der Doppelklick Spurdetails und den exakten Befehl.
+* Die Oberfläche ist deutsch; eine englische Übersetzung ist nicht enthalten.
+* Werkzeugsuche/-pfade entfallen, weil MKVToolNix und FFmpeg im Image enthalten sind.
+
+## 8. Bekannte Einschränkungen
 
 * **Decodierbarkeit ≠ Bildqualität.** Ein formal gültiger, aber inhaltlich falscher Frame (z. B. grüne Blöcke
   aus einer fehlerhaften Quelle) wird nur erkannt, wenn der Decoder ihn als fehlerhaft meldet.
@@ -331,10 +427,14 @@ Ein **nicht unterstützter Codec** ist ausdrücklich kein Defekt (Status „Nich
 * **arm64:** Das Dockerfile ist für `linux/amd64` und `linux/arm64` ausgelegt (alle Pakete sind für beide
   Architekturen in Ubuntu 24.04 verfügbar). Gebaut und getestet wurde in der Entwicklungsumgebung nur
   `linux/amd64`; der GitHub-Actions-Workflow baut beide Architekturen.
+* **MKV-Optimizer:** nur MKV-Dateien. Die Spurzuordnung zwischen mkvmerge und FFmpeg wird vor jeder
+  Audiokonvertierung geprüft; Dateien, bei denen sie nicht eindeutig ist, werden nicht bearbeitet. Ersetzen am
+  Original setzt voraus, dass Sicherungsordner und Datei im selben Dataset liegen (atomares Umbenennen).
+  Eine Konvertierung verlustbehafteter Formate ist naturgemäß nicht verlustfrei.
 * Die Reparaturfunktion ist nur vorbereitet (Remux in neue Datei), standardmäßig deaktiviert und kann zerstörte
   Bild-/Tondaten nicht wiederherstellen.
 
-## 8. Architektur
+## 9. Architektur
 
 ```
 Browser (React, TypeScript, Tailwind)  ──REST + SSE──►  FastAPI (uvicorn, 1 Prozess)
@@ -367,6 +467,7 @@ backend/app/scanners/messages.py    Regelwerk für Werkzeugmeldungen
 backend/app/scanners/process.py     Prozesssteuerung (Argumentlisten, Prioritäten, Pause, Abbruch)
 backend/app/services/               Bestandsaufnahme, Prüfablauf, Aufträge, Status, Export, Auth, Reparatur …
 backend/app/workers/                Worker und Zeitplaner
+backend/app/optimizer/              MKV-Optimizer (Spuranalyse, Regeln, Profile, Dateioperationen, Worker)
 frontend/src/                       Oberfläche
 tests/                              automatisierte Tests (inkl. Testmedien-Erzeugung)
 docker/                             Entrypoint, Testimage
@@ -387,6 +488,9 @@ scripts/docker-smoke-test.sh        Ende-zu-Ende-Test des Images mit /media:ro
 | `job_events` | Nachvollziehbares Auftragsprotokoll |
 | `scan_schedules` | Zeitpläne (Cron, Aufgabe, Methoden, nächster/letzter Lauf) |
 | `settings` | Einstellungen |
+| `optimizer_analysis`, `optimizer_tracks` | MKV-Optimizer: zwischengespeicherte Spuranalyse je Dateiversion |
+| `optimizer_profiles` | Profile der Audiokonvertierung |
+| `optimizer_jobs`, `optimizer_items` | Optimizer-Aufträge mit Plan, Ziel-/Sicherungspfad, temporären Dateien und Protokoll je Datei |
 
 Schemaänderungen erfolgen über Alembic (`backend/app/database/migrations`), die beim Start automatisch
 ausgeführt werden.
@@ -397,7 +501,7 @@ Interaktive Dokumentation unter `http://<server>:8080/api/docs`. Wichtige Endpun
 `GET /api/files/{id}`, `POST /api/jobs`, `POST /api/jobs/{id}/pause|resume|cancel`, `GET /api/scan/live`,
 `GET /api/events` (SSE), `GET /api/export?format=csv|json|html&scope=library|damaged|warnings|job|file|filter`.
 
-## 9. Tests
+## 10. Tests
 
 ```bash
 # lokal (Python 3.12+, ffmpeg, mkvtoolnix installiert)
@@ -423,10 +527,11 @@ Alle Testmedien werden mit FFmpeg erzeugt und gezielt beschädigt (`tests/media_
 | `test_scan_pipeline.py` | alle Modi über API und Worker: fehlerfreie MKV/MP4/TS, beschädigte Cluster (B), Decoderfehler (C), abgeschnitten, Header, Zeitsprung, beschädigter TS, nicht unterstützter Codec (H), Originale unverändert, inkrementeller Scan (E), Filter + CSV/JSON/HTML-Export mit Umlauten (F), Schnellprüfung ≠ Vollprüfung |
 | `test_job_control.py` | Abbruch ≠ Fehler, Pause per SIGSTOP und Fortsetzen, Pause nach Datei, Datei während der Prüfung verändert, gleichzeitige Aufträge + Duplikatschutz, Zeitpläne ohne Doppelstart, Verschieben/Umbenennen/Löschen, Ausschlüsse, nicht eingehängtes Dataset, Symlink-Ausbruch, fehlende Leserechte (echt im Container und simuliert), Anmeldung, Eingabevalidierung, Reparatur standardmäßig aus |
 | `test_restart_and_scale.py` | `kill -9` mitten im Scan und Wiederaufnahme (D), geordnetes Herunterfahren, 1.000 MKV-Dateien: Bestandsaufnahme, Prüfung, Paginierung, Originale unverändert (A) |
+| `test_optimizer.py` | MKV-Optimizer: Sprach-/Codec-/Track-ID-Regeln, geschützte Sprachen, nie ohne Audiospur, Remux ins Ausgabeverzeichnis (Original unverändert), Ersetzen nur mit Freigabe (mit Sicherung bzw. Löschen), Suffix-Modus, Audiokonvertierung ersetzen/zusätzlich mit eigenem Profil, fehlgeschlagene Ergebnisprüfung lässt Original unverändert, beschädigte Dateien übersprungen, Abbruch und Pause einer laufenden Konvertierung, Aufräumen nach Neustart |
 | `test_units.py` | Cron, Statuslogik, Zeitangaben, CSV-Formelschutz, Pfadvalidierung |
 | `scripts/docker-smoke-test.sh` | fertiges Image mit `/media:ro` (G), PUID/PGID, Healthcheck |
 
-## 10. Image bauen und aktualisieren
+## 11. Image bauen und aktualisieren
 
 ### Bauen
 
@@ -458,7 +563,7 @@ nicht ins Image):
 
 1. Neuen Quellstand holen (`git pull`), ggf. Digests im Dockerfile aktualisieren
    (`docker buildx imagetools inspect ubuntu:24.04`).
-2. Image neu bauen und taggen (`1.0.1`), Tests ausführen (Abschnitt 9).
+2. Image neu bauen und taggen (`1.0.1`), Tests ausführen (Abschnitt 10).
 3. In TrueNAS den Image-Tag der App ändern bzw. *Update* ausführen. `/config` bleibt erhalten;
    Datenbankmigrationen laufen beim Start automatisch. Laufende Scans werden nach dem Neustart fortgesetzt.
 4. Wird ein Prüfverfahren inhaltlich geändert, erhöht sich seine Prüferversion – betroffene Dateien werden beim
@@ -466,7 +571,7 @@ nicht ins Image):
 
 Sicherung: das Dataset `/config` (insbesondere `media-integrity.db`) per TrueNAS-Snapshot sichern.
 
-## 11. Abhängigkeiten
+## 12. Abhängigkeiten
 
 | Komponente | Version | Zweck |
 |---|---|---|
@@ -482,10 +587,14 @@ Sicherung: das Dataset `/config` (insbesondere `media-integrity.db`) per TrueNAS
 
 Es werden keine Cloud-Dienste oder externen APIs benötigt; alles läuft lokal.
 
-## 12. Sicherheit
+## 13. Sicherheit
 
-* Medien werden nur gelesen; empfohlen ist zusätzlich `:ro`. Keine automatische Reparatur, Löschung,
-  Umbenennung oder Metadatenänderung.
+* Die Integritätsprüfung liest Medien nur; empfohlen ist zusätzlich `:ro`. Keine automatische Reparatur,
+  Löschung, Umbenennung oder Metadatenänderung.
+* Der MKV-Optimizer schreibt nur auf ausdrückliche Anweisung (Konvertieren) und standardmäßig nur nach
+  `/output`. Originale verändert er nur nach Freigabe in den Einstellungen, nach erfolgreicher Prüfung der neuen
+  Datei und – im Modus „sichern“ – mit Sicherung des Originals. Zielpfade werden auf Ausgabeverzeichnis bzw.
+  Bibliothek beschränkt; Dateinamensmuster dürfen keine Pfadangaben enthalten.
 * Die Oberfläche liefert **keine Mediendaten** aus (kein Streaming, kein Download von Filmen) – nur Metadaten,
   Prüfergebnisse und Prüfprotokolle.
 * Externe Programme werden ausschließlich mit Argumentlisten gestartet; Dateipfade werden mit `file:`-Präfix an

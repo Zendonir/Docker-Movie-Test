@@ -22,6 +22,7 @@ from ..database import session_scope
 from ..models import ScanJob, ScanJobItem, utcnow
 from ..scanners.process import ScanControl
 from ..services import jobs as jobsvc
+from ..services import filelocks
 from ..services.events import bus
 from ..services.scan_service import FileProgress, scan_file
 from ..services.settings import AppSettings, load_settings
@@ -111,7 +112,8 @@ class ScanWorker:
                 continue
             if free <= 0:
                 continue
-            picked = await asyncio.to_thread(self._claim_items, job["id"], free, set(self.locked_files))
+            locked = set(self.locked_files) | set(filelocks.optimizer_busy)
+            picked = await asyncio.to_thread(self._claim_items, job["id"], free, locked)
             for item in picked:
                 self._spawn(item, settings)
                 free -= 1

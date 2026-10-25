@@ -24,6 +24,8 @@ services:
     volumes:
       - /mnt/tank/Filme:/media:ro
       - /mnt/tank/appdata/media-integrity:/config
+      # MKV-Optimizer: Zielordner für bearbeitete Dateien (Originale bleiben unverändert)
+      - /mnt/tank/Filme-optimiert:/output
     stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true

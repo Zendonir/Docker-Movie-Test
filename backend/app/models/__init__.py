@@ -327,3 +327,117 @@ class Setting(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[object] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# MKV-Optimizer
+
+
+class OptimizerAnalysis(Base):
+    """Ergebnis von mkvmerge -J für eine Dateiversion (Cache für die Spurübersicht)."""
+
+    __tablename__ = "optimizer_analysis"
+
+    file_id: Mapped[int] = mapped_column(ForeignKey("media_files.id", ondelete="CASCADE"), primary_key=True)
+    fingerprint_version: Mapped[int] = mapped_column(Integer)
+    analyzed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    title: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    audio_count: Mapped[int] = mapped_column(Integer, default=0)
+    subtitle_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    tracks: Mapped[list["OptimizerTrack"]] = relationship(cascade="all, delete-orphan", passive_deletes=True,
+                                                          order_by="OptimizerTrack.track_id")
+
+
+class OptimizerTrack(Base):
+    __tablename__ = "optimizer_tracks"
+    __table_args__ = (Index("ix_optimizer_tracks_file", "file_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    file_id: Mapped[int] = mapped_column(ForeignKey("optimizer_analysis.file_id", ondelete="CASCADE"))
+    track_id: Mapped[int] = mapped_column(Integer)
+    type: Mapped[str] = mapped_column(String(16))  # video, audio, subtitles, buttons
+    codec: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    codec_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    codec_family: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    language: Mapped[str] = mapped_column(String(16), default="und")
+    language_ietf: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_forced: Mapped[bool] = mapped_column(Boolean, default=False)
+    channels: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class OptimizerProfile(Base):
+    """Profil für die Audiokonvertierung."""
+
+    __tablename__ = "optimizer_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), unique=True)
+    builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    codec: Mapped[str] = mapped_column(String(16))  # ac3, eac3, aac, flac, opus, mp3
+    bitrate_kbps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_channels: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_codecs: Mapped[list] = mapped_column(JSON, default=list)  # leer = alle Audiospuren
+    source_languages: Mapped[list] = mapped_column(JSON, default=list)  # leer = alle Sprachen
+    mode: Mapped[str] = mapped_column(String(16), default="replace")  # replace | add
+    track_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    filename_pattern: Mapped[str] = mapped_column(String(200), default="{name}")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class OptimizerJob(Base):
+    __tablename__ = "optimizer_jobs"
+    __table_args__ = (Index("ix_optimizer_jobs_state", "state"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16))  # remux | audio
+    name: Mapped[str] = mapped_column(String(300))
+    state: Mapped[str] = mapped_column(String(16), default="queued")
+    params: Mapped[dict] = mapped_column(JSON, default=dict)  # Regeln/Profil + Dateioperationen (Momentaufnahme)
+    pause_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    total_files: Mapped[int] = mapped_column(Integer, default=0)
+    done_files: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_files: Mapped[int] = mapped_column(Integer, default=0)
+    failed_files: Mapped[int] = mapped_column(Integer, default=0)
+    total_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    done_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    saved_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    active_seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    resume_count: Mapped[int] = mapped_column(Integer, default=0)
+    events: Mapped[list] = mapped_column(JSON, default=list)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class OptimizerItem(Base):
+    __tablename__ = "optimizer_items"
+    __table_args__ = (Index("ix_optimizer_items_job_state", "job_id", "state"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("optimizer_jobs.id", ondelete="CASCADE"))
+    file_id: Mapped[int | None] = mapped_column(ForeignKey("media_files.id", ondelete="SET NULL"), nullable=True)
+    seq: Mapped[int] = mapped_column(Integer, default=0)
+    state: Mapped[str] = mapped_column(String(16), default="pending")  # pending, running, done, skipped, failed, cancelled
+    source_path: Mapped[str] = mapped_column(String(4096))
+    size: Mapped[int] = mapped_column(BigInteger, default=0)
+    output_path: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    temp_paths: Mapped[list] = mapped_column(JSON, default=list)
+    backup_path: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    output_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    plan: Mapped[dict] = mapped_column(JSON, default=dict)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    duration_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    log: Mapped[str | None] = mapped_column(Text, nullable=True)

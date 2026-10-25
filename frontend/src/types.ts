@@ -277,3 +277,125 @@ export interface Paged<T> {
   page?: number;
   page_size?: number;
 }
+
+// ---------------------------------------------------------------- MKV-Optimizer
+export interface OptTrack {
+  id: number;
+  type: string;
+  codec: string | null;
+  family: string | null;
+  language: string;
+  language_label: string;
+  name: string | null;
+  default: boolean;
+  forced: boolean;
+  channels: number | null;
+}
+
+export interface TrackRule {
+  mode: "language" | "track_id";
+  languages: string[];
+  codecs: string[];
+  track_ids: number[];
+}
+
+export interface OptRules {
+  audio: TrackRule;
+  subtitles: TrackRule;
+}
+
+export interface OptPlan {
+  changed: boolean;
+  skip_reason: string | null;
+  warnings?: string[];
+  decisions?: { track_id: number; type: string; keep: boolean; reason: string }[];
+  kept?: number[];
+  removed?: number[];
+  default_track?: number | null;
+  track_order?: number[] | string[] | null;
+  conversions?: { track_id: number; language: string; source_codec: string | null; channels_in: number | null; channels_out: number | null; track_name: string }[];
+  mode?: string;
+}
+
+export interface OptFile {
+  file_id: number;
+  filename: string;
+  directory: string;
+  size: number;
+  status: FileStatus;
+  analyzed: boolean;
+  ok: boolean | null;
+  error: string | null;
+  duration: number | null;
+  title: string | null;
+  tracks: OptTrack[];
+  plan: OptPlan | null;
+}
+
+export interface Choice { value: string; label: string; count: number }
+
+export interface OptPreview {
+  total: number;
+  changed_ids: number[];
+  unanalyzed: number;
+  choices: { audio_languages: Choice[]; audio_codecs: Choice[]; subtitle_languages: Choice[]; subtitle_codecs: Choice[] };
+  items: OptFile[];
+}
+
+export interface OptStatus {
+  tools: { mkvmerge: string | null; ffmpeg: string | null };
+  encoders: Record<string, string | null>;
+  output_root: string;
+  modes: Record<string, { label: string; available: boolean; reason: string | null }>;
+  ops: Record<string, unknown> & { output_mode: string; protected_languages: string[] };
+  allow_modify_originals: boolean;
+  last_rules: OptRules;
+  libraries: { id: number; name: string; path: string }[];
+}
+
+export interface AnalyzeState { running: boolean; total: number; done: number; analyzed: number; errors: number; message: string | null; elapsed: number | null }
+
+export interface OptProfile {
+  id: number;
+  name: string;
+  builtin: boolean;
+  codec: string;
+  codec_label: string;
+  bitrate_kbps: number | null;
+  max_channels: number | null;
+  sample_rate: number | null;
+  source_codecs: string[];
+  source_languages: string[];
+  mode: "replace" | "add";
+  track_name: string | null;
+  filename_pattern: string;
+  encoder_available: boolean;
+}
+
+export interface OptJob {
+  id: number;
+  kind: "remux" | "audio";
+  name: string;
+  state: string;
+  pause_requested: boolean;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  total_files: number;
+  done_files: number;
+  skipped_files: number;
+  failed_files: number;
+  total_bytes: number;
+  done_bytes: number;
+  saved_bytes: number;
+  resume_count: number;
+  output_mode: string;
+  message: string | null;
+}
+
+export interface OptLiveJob extends OptJob {
+  processed_bytes: number;
+  speed_bps: number | null;
+  eta_seconds: number | null;
+  current: { item_id: number; file_id: number; name: string; size: number; phase: string; fraction: number; eta_seconds: number | null; elapsed: number; paused: boolean } | null;
+}

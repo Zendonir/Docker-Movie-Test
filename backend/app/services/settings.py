@@ -43,6 +43,18 @@ class AppSettings(BaseModel):
     max_findings_per_result: int = Field(400, ge=10, le=10000)
     stall_timeout_s: int = Field(1800, ge=60, le=86400)
     keep_scan_logs: bool = True
+    # MKV-Optimizer – Dateioperationen
+    optimizer_output_mode: Literal["output_dir", "beside", "replace_backup", "replace_delete"] = "output_dir"
+    optimizer_allow_modify_originals: bool = False
+    optimizer_suffix: str = Field(".optimiert", max_length=64)
+    optimizer_backup_dir: str = Field(".mis-originale", max_length=128)
+    optimizer_remove_metadata: bool = False
+    optimizer_reorder_tracks: bool = True
+    optimizer_set_default_track: bool = True
+    optimizer_protected_languages: list[str] = Field(default_factory=lambda: ["ger"])
+    optimizer_verify_output: bool = True
+    optimizer_skip_damaged: bool = True
+    optimizer_last_rules: dict = Field(default_factory=dict)
     auth_enabled: bool = False
     auth_username: str | None = None
     auth_password_hash: str | None = None
@@ -57,6 +69,28 @@ class AppSettings(BaseModel):
                 raise ValueError(f"Ungültige Dateiendung: {e!r}")
             out.append(e)
         return sorted(set(out))
+
+    @field_validator("optimizer_suffix")
+    @classmethod
+    def _suffix(cls, v: str) -> str:
+        v = v.strip()
+        if any(c in v for c in "/\\\x00") or ".." in v:
+            raise ValueError("Ungültiges Dateinamens-Suffix")
+        return v
+
+    @field_validator("optimizer_backup_dir")
+    @classmethod
+    def _backup_dir(cls, v: str) -> str:
+        v = v.strip().strip("/")
+        if not v or any(c in v for c in "\\\x00") or ".." in v.split("/"):
+            raise ValueError("Ungültiger Sicherungsordner (relativ zur Bibliothek, ohne '..')")
+        return v
+
+    @field_validator("optimizer_protected_languages")
+    @classmethod
+    def _langs(cls, v: list[str]) -> list[str]:
+        from ..optimizer.languages import normalize_language
+        return sorted({normalize_language(x) for x in v if x and x.strip()})
 
     @field_validator("exclude_patterns")
     @classmethod

@@ -15,6 +15,7 @@ import { Reports } from "./pages/Reports";
 import { Libraries } from "./pages/Libraries";
 import { SettingsPage } from "./pages/Settings";
 import { Login } from "./pages/Login";
+import { OptimizerPage } from "./pages/optimizer/Optimizer";
 
 interface AuthStatus { auth_enabled: boolean; authenticated: boolean; username: string | null }
 
@@ -42,6 +43,8 @@ export function App() {
         <Route path="/berichte" element={<Reports />} />
         <Route path="/bibliotheken" element={<Libraries />} />
         <Route path="/einstellungen" element={<SettingsPage />} />
+        <Route path="/optimizer" element={<OptimizerPage />} />
+        <Route path="/optimizer/:tab" element={<OptimizerPage />} />
         <Route path="*" element={<div className="p-8 text-slate-500">Seite nicht gefunden.</div>} />
       </Routes>
     </Layout>

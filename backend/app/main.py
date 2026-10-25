@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 
 from . import __version__
-from .api import auth_routes, events, exports_routes, files, jobs, libraries, schedules, settings_routes, stats, system
+from .api import auth_routes, events, exports_routes, files, jobs, libraries, optimizer, schedules, settings_routes, stats, system
 from .api.deps import require_auth
 from .config import get_config
 from .database import dispose_engine, get_engine, init_engine, session_scope
@@ -28,6 +28,7 @@ from .services.jobs import recover_after_restart
 from .services.pathsec import real
 from .services.settings import invalidate_cache, load_settings, update_settings
 from .workers.scheduler import scheduler_loop
+from .optimizer import worker as optworker
 from .workers.worker import ScanWorker, set_worker
 
 log = logging.getLogger("media_integrity")
@@ -76,9 +77,11 @@ def bootstrap() -> None:
                     db.add(Library(name="Filme" if len(cfg.media_roots) == 1 else root.name or "Medien",
                                    path=real(root), exclude_patterns=[]))
                     log.info("Bibliothek automatisch angelegt: %s", root)
+        optimizer.ensure_builtin_profiles(db)
         resumed = recover_after_restart(db, load_settings(db))
         if resumed:
             log.warning("Nach Neustart fortgesetzte Aufträge: %s", resumed)
+    optworker.recover_after_restart()
     tools = get_toolset()
     log.info("Media Integrity Scanner %s – Werkzeuge: %s, %d decodierbare Codecs, UID %s/GID %s",
              __version__, tools.versions(), len(tools.decodable_codecs), os.getuid(), os.getgid())
@@ -95,11 +98,16 @@ async def lifespan(app: FastAPI):
     set_worker(w)
     app.state.worker = w
     w.start()
+    ow = optworker.OptimizerWorker(scan_worker=w)
+    optworker.worker = ow
+    ow.start()
     sched = asyncio.create_task(scheduler_loop(w.wake))
     try:
         yield
     finally:
         sched.cancel()
+        await ow.stop()
+        optworker.worker = None
         await w.stop("shutdown")
         set_worker(None)
         dispose_engine()
@@ -125,7 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_routes.router)
     protected = [Depends(require_auth)]
     for r in (libraries.router, files.router, jobs.router, schedules.router, settings_routes.router, stats.router,
-              exports_routes.router, events.router, system.router):
+              exports_routes.router, events.router, system.router, optimizer.router):
         app.include_router(r, dependencies=protected)
 
     @app.middleware("http")

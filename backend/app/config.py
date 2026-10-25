@@ -50,6 +50,7 @@ class AppConfig:
     auth_password: str | None
     repair_enabled: bool
     tmp_dir: Path
+    optimizer_output_dir: Path
     log_level: str
     tz: str
     extra: dict = field(default_factory=dict)
@@ -92,6 +93,7 @@ def load_config() -> AppConfig:
         auth_password=os.environ.get("AUTH_PASSWORD") or None,
         repair_enabled=_bool("REPAIR_ENABLED", False),
         tmp_dir=Path(os.environ.get("SCAN_TMP_DIR", str(config_dir / "tmp"))),
+        optimizer_output_dir=Path(os.environ.get("OPTIMIZER_OUTPUT_DIR", "/output")),
         log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),
         tz=os.environ.get("TZ", "Europe/Berlin"),
     )

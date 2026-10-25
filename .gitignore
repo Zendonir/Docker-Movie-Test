@@ -7,3 +7,4 @@ __pycache__/
 backend/dev.db
 tests/_generated/
 .env
+frontend/*.tsbuildinfo

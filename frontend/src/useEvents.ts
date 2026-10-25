@@ -39,6 +39,15 @@ export function useLiveEvents(enabled: boolean) {
             qc.invalidateQueries({ queryKey: ["job", id] });
             qc.invalidateQueries({ queryKey: ["live"] });
             invalidateSoon();
+          } else if (msg.event === "optimizer_progress") {
+            qc.setQueryData(["opt-live"], msg.data);
+          } else if (msg.event === "optimizer_analysis") {
+            qc.setQueryData(["opt-analyze"], msg.data);
+            if (!(msg.data as { running: boolean }).running) qc.invalidateQueries({ queryKey: ["opt-preview"] });
+          } else if (msg.event === "optimizer") {
+            qc.invalidateQueries({ queryKey: ["opt-live"] });
+            qc.invalidateQueries({ queryKey: ["opt-jobs"] });
+            qc.invalidateQueries({ queryKey: ["opt-job"] });
           } else if (msg.event === "stats" || msg.event === "scanner") {
             invalidateSoon();
           }

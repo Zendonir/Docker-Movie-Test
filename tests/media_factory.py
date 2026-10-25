@@ -129,3 +129,23 @@ def damage_ts(src: Path, dst: Path) -> Path:
         data[k:k + 188] = bytes(rnd.getrandbits(8) for _ in range(188))
     dst.write_bytes(data)
     return dst
+
+
+def make_multi_mkv(path: Path, seconds: int = 8) -> Path:
+    """Video + GER AC3 5.1 (Standard) + GER DTS 5.1 + ENG AAC + Untertitel GER/ENG."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    srt_de = path.parent / f".{path.stem}.de.srt"
+    srt_en = path.parent / f".{path.stem}.en.srt"
+    srt_de.write_text("1\n00:00:01,000 --> 00:00:03,000\nHallo Welt – Größe\n", encoding="utf-8")
+    srt_en.write_text("1\n00:00:01,000 --> 00:00:03,000\nHello world\n", encoding="utf-8")
+    _ffmpeg("-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25", "-f", "lavfi", "-i", "sine=440:sample_rate=48000",
+            "-f", "lavfi", "-i", "sine=660:sample_rate=48000", "-f", "lavfi", "-i", "sine=880:sample_rate=48000",
+            "-i", str(srt_de), "-i", str(srt_en), "-t", str(seconds),
+            "-map", "0", "-map", "1", "-map", "2", "-map", "3", "-map", "4", "-map", "5", *video_encoder(),
+            "-c:a:0", "ac3", "-ac:a:0", "6", "-c:a:1", "dca", "-strict", "-2", "-ac:a:1", "6", "-c:a:2", "aac",
+            "-c:s", "srt", "-metadata:s:a:0", "language=ger", "-metadata:s:a:1", "language=ger",
+            "-metadata:s:a:2", "language=eng", "-metadata:s:s:0", "language=ger", "-metadata:s:s:1", "language=eng",
+            "-disposition:a:0", "default", "-metadata", "title=Testfilm", str(path))
+    srt_de.unlink()
+    srt_en.unlink()
+    return path
