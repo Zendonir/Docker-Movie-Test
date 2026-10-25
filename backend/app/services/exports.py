@@ -15,12 +15,15 @@ from sqlalchemy.orm import Session
 
 from ..config import get_config
 from ..models import DetectedError, Library, MediaFile, ScanJob, ScanJobItem, ScanResult
+from .repairability import CATEGORIES, ORDER, assess
 from .labels import (
     CHECK_LEVEL_LABELS, METHOD_LABELS, OUTCOME_LABELS, PRECISION_LABELS, SEVERITY_LABELS, STATUS_LABELS,
     error_type_label, fmt_position, fmt_size, fmt_time,
 )
 
-SCOPES = ("library", "damaged", "warnings", "job", "file", "filter")
+SCOPES = ("library", "damaged", "warnings", "job", "file", "filter", "assessment", "repair", "replace")
+# Bewertungslisten: welche Kategorien gehören in welche Liste
+ASSESSMENT_SCOPES = {"assessment": None, "repair": {"repair"}, "replace": {"replace"}}
 BATCH = 500
 
 
@@ -42,8 +45,10 @@ def _file_query(scope: str, job_id: int | None, file_id: int | None, library_id:
         f = {"search": None, "status": None, "ext": None, "library_id": None, "directory": None, "only_new": False,
              "only_damaged": False, "present": "yes", "check_level": None} | (filters or {})
         q = apply_filters(q, **f)
-    elif scope == "library":
+    elif scope in ("library", "assessment"):
         pass
+    elif scope in ("repair", "replace"):
+        q = q.where(MediaFile.present.is_(True), MediaFile.status.in_(("critical", "error", "warning", "incomplete")))
     elif scope == "damaged":
         q = q.where(MediaFile.status.in_(("critical", "error")))
     elif scope == "warnings":
@@ -131,6 +136,10 @@ def iter_records(db: Session, scope: str, job_id: int | None = None, file_id: in
                         "occurrences": e.occurrences,
                         "raw_message": e.raw_message,
                     })
+            rating = assess(f.status, findings)
+            wanted = ASSESSMENT_SCOPES.get(scope)
+            if wanted is not None and rating["category"] not in wanted:
+                continue
             yield {
                 "id": f.id,
                 "filename": f.filename,
@@ -163,11 +172,15 @@ def iter_records(db: Session, scope: str, job_id: int | None = None, file_id: in
                     "decoded_duration": r.decoded_duration, "container_duration": r.container_duration,
                 } for r in rs],
                 "findings": findings,
+                "assessment": rating["category"],
+                "assessment_label": rating["label"],
+                "assessment_reasons": rating["reason_text"],
+                "assessment_action": rating["action"],
             }
 
 
 CSV_FILE_COLUMNS = [
-    ("Status", "status_label"), ("Prüftiefe", "check_level_label"), ("Film", "filename"), ("Pfad", "path"),
+    ("Empfehlung", "assessment_label"), ("Begründung", "assessment_reasons"), ("Status", "status_label"), ("Prüftiefe", "check_level_label"), ("Film", "filename"), ("Pfad", "path"),
     ("Verzeichnis", "directory"), ("Bibliothek", "library"), ("Größe (Byte)", "size"), ("Größe", "size_label"),
     ("Dauer", "duration_label"), ("Container", "container"), ("Videoformat", "video_codec"),
     ("Auflösung", "resolution"), ("Audio", "audio_codecs"), ("Letzte Prüfung", "last_checked_label"),
@@ -182,11 +195,16 @@ CSV_FINDING_COLUMNS = [
 ]
 
 
-def _csv_val(v) -> str:
+def _csv_val(v, decimal_comma: bool = False) -> str:
     if v is None:
         return ""
     if isinstance(v, bool):
         return "ja" if v else "nein"
+    if isinstance(v, float):
+        # 3 Nachkommastellen; mit Semikolon-Trenner deutsches Dezimalkomma, sonst liest Excel
+        # „3.67“ als Datum und „5482.252333“ als Tausenderzahl
+        s = f"{v:.3f}".rstrip("0").rstrip(".")
+        return s.replace(".", ",") if decimal_comma else s
     s = str(v)
     # Schutz vor Formel-Injektion in Tabellenkalkulationen
     if s and s[0] in "=+-@" and not s.lstrip("-").replace(".", "", 1).isdigit():
@@ -202,11 +220,12 @@ def export_csv(records: Iterator[dict], details: bool, delimiter: str = ";") -> 
     yield ("﻿" + buf.getvalue()).encode("utf-8")  # BOM: Excel erkennt UTF-8/Umlaute
     buf.seek(0)
     buf.truncate()
+    dc = delimiter == ";"
     for rec in records:
-        base = [_csv_val(rec.get(k)) for _, k in CSV_FILE_COLUMNS]
+        base = [_csv_val(rec.get(k), dc) for _, k in CSV_FILE_COLUMNS]
         if details and rec["findings"]:
             for f in rec["findings"]:
-                w.writerow(base + [_csv_val(f.get(k)) for _, k in CSV_FINDING_COLUMNS])
+                w.writerow(base + [_csv_val(f.get(k), dc) for _, k in CSV_FINDING_COLUMNS])
         else:
             w.writerow(base + ([""] * len(CSV_FINDING_COLUMNS) if details else []))
         if buf.tell() > 64 * 1024:
@@ -299,6 +318,47 @@ def export_html(records: Iterator[dict], meta: dict, details: bool) -> Iterator[
            "kein zweifelsfreier Defektnachweis.</p></body></html>").encode("utf-8")
 
 
+def export_assessment_html(records: Iterator[dict], meta: dict) -> Iterator[bytes]:
+    """Reparaturlisten: je Empfehlung eine Tabelle (ersetzen, reparieren, …)."""
+    e = html.escape
+    groups: dict[str, list[str]] = {k: [] for k in ORDER}
+    sizes: dict[str, int] = {k: 0 for k in ORDER}
+    for rec in records:
+        cat = rec["assessment"]
+        sizes[cat] += rec["size"] or 0
+        groups[cat].append(
+            f"<tr><td>{e(rec['filename'])}<div class='path'>{e(rec['path'])}</div></td>"
+            f"<td>{e(rec['assessment_reasons'] or '–')}</td><td class='s-{e(rec['status'])}'>{e(rec['status_label'])}</td>"
+            f"<td>{e(rec['check_level_label'])}</td><td>{e(rec['size_label'])}</td><td>{e(rec['last_checked_label'])}</td></tr>")
+    cls = {"replace": "critical", "repair": "error", "optional": "warning", "ok": "ok", "unchecked": "unchecked"}
+    out = [f"<!doctype html><html lang='de'><head><meta charset='utf-8'><title>{e(meta['title'])}</title>"
+           f"<style>{HTML_STYLE}</style></head><body><h1>{e(meta['title'])}</h1>"
+           f"<div class='meta'>Erstellt am {e(meta['created'])} · Media Integrity Scanner</div>"
+           "<table class='summary' style='width:auto'><tr><th>Empfehlung</th><th>Dateien</th><th>Größe</th></tr>"]
+    for k in ORDER:
+        if groups[k]:
+            out.append(f"<tr><td class='s-{cls[k]}'><a href='#{k}'>{e(CATEGORIES[k]['label'])}</a></td>"
+                       f"<td>{len(groups[k])}</td><td>{e(fmt_size(sizes[k]))}</td></tr>")
+    out.append("</table>")
+    yield "".join(out).encode("utf-8")
+    for k in ORDER:
+        if not groups[k]:
+            continue
+        yield (f"<h2 id='{k}' class='s-{cls[k]}'>{e(CATEGORIES[k]['label'])} ({len(groups[k])})</h2>"
+               f"<p class='meta'>{e(CATEGORIES[k]['action'])}</p><table><thead><tr><th>Film</th><th>Begründung</th>"
+               "<th>Status</th><th>Prüftiefe</th><th>Größe</th><th>Letzte Prüfung</th></tr></thead><tbody>"
+               + "".join(groups[k]) + "</tbody></table>").encode("utf-8")
+    yield ("<p class='meta'>Die Empfehlung ist eine Auslegung der Befunde: Datenverlust (zerstörte Cluster, fehlende "
+           "Spielzeit, Decodierfehler) lässt sich nicht reparieren; Index-, Laufzeit- und Zeitstempelfehler ohne "
+           "Datenverlust behebt ein Remux. Harmlose Werkzeugmeldungen (z. B. PGS-Untertitel ohne Startpaket, "
+           "Dolby-Vision-Zusatzdaten) werden nicht gewertet.</p></body></html>").encode("utf-8")
+
+
+def _sorted_by_assessment(records: Iterator[dict]) -> Iterator[dict]:
+    rank = {k: i for i, k in enumerate(ORDER)}
+    yield from sorted(records, key=lambda r: (rank[r["assessment"]], (r["path"] or "").lower()))
+
+
 def scope_label(scope: str, db: Session, job_id: int | None, file_id: int | None) -> str:
     if scope == "job" and job_id:
         job = db.get(ScanJob, job_id)
@@ -307,7 +367,10 @@ def scope_label(scope: str, db: Session, job_id: int | None, file_id: int | None
         f = db.get(MediaFile, file_id)
         return f"Datei: {f.filename}" if f else "Datei"
     return {"library": "Gesamte Bibliothek", "damaged": "Beschädigte Dateien (Kritisch/Fehler)",
-            "warnings": "Dateien mit Warnungen", "filter": "Gefilterte Dateiliste"}.get(scope, scope)
+            "warnings": "Dateien mit Warnungen", "filter": "Gefilterte Dateiliste",
+            "assessment": "Reparaturübersicht (alle Dateien nach Empfehlung)",
+            "repair": "Dateien, die repariert werden sollten",
+            "replace": "Nicht mehr reparierbare Dateien (ersetzen)"}.get(scope, scope)
 
 
 def build_export(db: Session, fmt: str, scope: str, job_id: int | None = None, file_id: int | None = None,
@@ -317,6 +380,8 @@ def build_export(db: Session, fmt: str, scope: str, job_id: int | None = None, f
         raise ExportError("Unbekannter Umfang")
     if details is None:
         details = scope in ("damaged", "warnings", "file", "job", "filter")
+    if details and scope == "assessment" and fmt == "html":
+        details = False
     label = scope_label(scope, db, job_id, file_id)
     created = datetime.now(ZoneInfo(get_config().tz))
     meta = {"title": f"Media Integrity Scanner – {label}", "scope": scope, "scope_label": label,
@@ -324,6 +389,10 @@ def build_export(db: Session, fmt: str, scope: str, job_id: int | None = None, f
     records = iter_records(db, scope, job_id, file_id, library_id, filters=filters)
     stamp = created.strftime("%Y%m%d-%H%M")
     base = f"media-integrity-{scope}{'-' + str(job_id or file_id) if (job_id or file_id) else ''}-{stamp}"
+    if scope in ASSESSMENT_SCOPES:
+        records = _sorted_by_assessment(records)
+        if fmt == "html":
+            return export_assessment_html(records, meta), "text/html; charset=utf-8", base + ".html"
     if fmt == "csv":
         return export_csv(records, details, delimiter), "text/csv; charset=utf-8", base + ".csv"
     if fmt == "json":

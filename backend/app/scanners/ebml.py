@@ -381,6 +381,7 @@ class Options:
     duration_tolerance_s: float = 5.0
     duration_tolerance_pct: float = 2.0
     max_findings: int = 400
+    cluster_back_tolerance: float = 1.0
 
 
 @dataclass
@@ -1075,7 +1076,18 @@ class MatroskaValidator:
     def _check_cluster_ts(self, hpos: int, ts: float) -> None:
         st = self.state
         prev_end = st.max_block_end
-        if st.prev_cluster_ts is not None and ts + 0.001 < st.prev_cluster_ts:
+        if st.prev_cluster_ts is not None and ts + 0.001 < st.prev_cluster_ts \
+                and st.prev_cluster_ts - ts < self.opt.cluster_back_tolerance:
+            # Ein Cluster darf mit einem (z. B. Audio-)Block beginnen, der geringfügig vor dem ersten Block
+            # des vorigen Clusters liegt – bei verschachtelten Spuren üblich und von der Spezifikation gedeckt.
+            self.add(self._f(
+                "timestamp_backwards", Severity.INFO,
+                f"Clusterzeitstempel liegt {st.prev_cluster_ts - ts:.3f} s vor dem vorigen Cluster "
+                "(zulässige Verschachtelung der Spuren).",
+                byte_offset=hpos, time_start=ts, time_end=st.prev_cluster_ts,
+                time_precision=TimePrecision.EXACT, time_source="Matroska-Clusterzeitstempel",
+            ), aggregate_key=("cluster_backwards_small",))
+        elif st.prev_cluster_ts is not None and ts + 0.001 < st.prev_cluster_ts:
             self.add(self._f(
                 "timestamp_backwards", Severity.ERROR,
                 f"Clusterzeitstempel springt rückwärts von {st.prev_cluster_ts:.3f} s auf {ts:.3f} s.",

@@ -109,7 +109,16 @@ export interface ScanResult {
   fingerprint_version: number;
 }
 
+export interface Assessment {
+  category: "replace" | "repair" | "optional" | "ok" | "unchecked";
+  label: string;
+  action: string;
+  reasons: string[];
+  reason_text: string;
+}
+
 export interface FileDetail extends MediaFileSummary {
+  assessment: Assessment;
   quick_hash: string | null;
   full_hash: string | null;
   fingerprint_version: number;

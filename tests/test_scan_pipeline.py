@@ -124,8 +124,19 @@ def test_full_pipeline(client, app_env, base_media):
     raw = r.content
     assert raw.startswith("﻿".encode())
     rows = list(csv.reader(io.StringIO(raw.decode("utf-8-sig")), delimiter=";"))
-    assert rows[0][0] == "Status" and "Zeitpunkt" in rows[0]
-    assert {r_[2] for r_ in rows[1:]} >= {"cluster_header.mkv", "decoderfehler.mkv"}
+    assert rows[0][0] == "Empfehlung" and "Status" in rows[0] and "Zeitpunkt" in rows[0]
+    film = rows[0].index("Film")
+    assert {r_[film] for r_ in rows[1:]} >= {"cluster_header.mkv", "decoderfehler.mkv"}
+
+    # Reparaturlisten: zerstörter Cluster → ersetzen; Übersicht gruppiert alle Dateien
+    r = client.get("/api/export", params={"format": "json", "scope": "replace"})
+    repl = json.loads(r.content.decode("utf-8"))["files"]
+    assert repl and all(x["assessment"] == "replace" for x in repl)
+    assert "cluster_header.mkv" in {x["filename"] for x in repl}
+    r = client.get("/api/export", params={"format": "csv", "scope": "repair"})
+    assert r.status_code == 200
+    r = client.get("/api/export", params={"format": "html", "scope": "assessment"})
+    assert "Nicht mehr reparierbar" in r.text and "Kein Handlungsbedarf" in r.text
 
     r = client.get("/api/export", params={"format": "csv", "scope": "library"})
     assert UMLAUT in r.content.decode("utf-8-sig")

@@ -262,7 +262,7 @@ wenn für **dieselbe Methode** ein vollständig abgeschlossenes Ergebnis für **
 | Status | Bedeutung | Beispiele |
 |---|---|---|
 | **Kritisch** | Datei nicht oder nur teilweise abspielbar | nicht lesbar, EBML-Header zerstört, abgeschnitten, E/A-Fehler, Decodierung bricht ab, keine Resynchronisation möglich |
-| **Fehler** | beschädigte Daten nachgewiesen | beschädigte Cluster/Videoframes, Audiodecodierungsfehler, CRC falsch, Paketfehler, Zeitstempelsprung ≥ 30 s, rückwärts laufende Cluster |
+| **Fehler** | beschädigte Daten nachgewiesen | beschädigte Cluster/Videoframes, Audiodecodierungsfehler, CRC falsch, Paketfehler, Zeitstempelsprung ≥ 30 s, Cluster, die ≥ 1 s rückwärts springen |
 | **Warnung** | auffällig, **kein sicherer Defektnachweis** | Laufzeitabweichung, Sprünge ≥ 3 s, Spurlücken, inkonsistente Metadaten, ungültige Cues, nicht klassifizierte Werkzeugwarnungen |
 | **Ohne erkannte Fehler** | alle gewählten Prüfungen vollständig, keine relevanten Befunde | – |
 | **Nicht vollständig geprüft** | kein Urteil möglich | abgebrochen, Datei während der Prüfung verändert, Werkzeug fehlgeschlagen, Codec nicht unterstützt, keine Leserechte |
@@ -270,6 +270,32 @@ wenn für **dieselbe Methode** ein vollständig abgeschlossenes Ergebnis für **
 Heuristische Befunde sind in Oberfläche und Berichten als „Hinweis“ markiert. Unbekannte Werkzeugmeldungen
 werden nie als Fehler gewertet, sondern als nicht eindeutige Warnung (Decoder/Demuxer) oder nur protokolliert.
 Ein **nicht unterstützter Codec** ist ausdrücklich kein Defekt (Status „Nicht vollständig geprüft“).
+
+**Rückwärts laufende Clusterzeitstempel:** Ein Cluster darf mit einem Block beginnen, der etwas vor dem
+ersten Block des vorigen Clusters liegt (verschachtelte Audio-/Videospuren). Bis Containerprüfer-Version 1
+wurde das als Fehler gemeldet – das betraf fast jeden 4K-Remux. Ab Version 2 gilt ein Rücksprung unter 1 s
+als zulässig (nur noch protokolliert). Bei einem inkrementellen Scan werden betroffene Dateien automatisch
+neu geprüft, weil sich die Prüferversion geändert hat.
+
+### Reparaturbewertung und Reparaturlisten
+
+Jede Datei bekommt aus ihren Befunden eine **Empfehlung** (Detailseite, Spalte „Empfehlung“ in allen
+CSV-Exporten). Die Bewertung legt die gespeicherten Befunde nur aus; sie verändert keine Prüfergebnisse.
+
+| Empfehlung | Bedeutung | typische Befunde |
+|---|---|---|
+| **Nicht mehr reparierbar** | Daten fehlen oder sind zerstört → neu beschaffen/neu rippen | beschädigte Cluster, CRC-Fehler, E/A-Fehler, abgeschnitten, Bild-/Decodierfehler, Lücke ≥ 10 s, Ende fehlt ≥ 10 s, Rücksprung ≥ 10 s |
+| **Reparatur empfohlen** | Struktur ohne Datenverlust → Remux mit mkvmerge | fehlerhafter Index (Cues/SeekHead), Daten nach Segmentende, falsche Laufzeitangabe, Rücksprünge 1–10 s |
+| **Kleinere Auffälligkeiten** | abspielbar, Remux optional | ungeordnete Paketzeitstempel, kurze Spurrücksprünge, Decoderwarnungen |
+| **Nicht ausreichend geprüft** | kein Urteil möglich | abgebrochen, Werkzeug fehlgeschlagen |
+| **Kein Handlungsbedarf** | keine oder nur harmlose Meldungen | PGS-Untertitel ohne Startpaket, Dolby-Vision-Zusatzdaten („Block Addition“), gleiche DTS bei TrueHD/E-AC-3, MPEG-2 „ignoring pic cod ext“ |
+
+Unter **Berichte** gibt es dafür drei Listen: *Nicht mehr reparierbar*, *Sollten repariert werden* und
+die *Reparaturübersicht* (alle Dateien nach Empfehlung gruppiert, als HTML mit Summen je Gruppe).
+API: `/api/export?scope=replace|repair|assessment&format=csv|json|html`.
+
+CSV mit Semikolon schreibt Zahlen mit Dezimalkomma und drei Nachkommastellen, damit Excel (deutsch) sie
+nicht als Datum („3.67“ → „Mrz 67“) oder Tausenderzahl liest.
 
 **Zeitangaben** werden nie aus Byte-Offsets oder Bitraten geschätzt:
 

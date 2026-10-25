@@ -6,6 +6,9 @@ import type { Job, Library, Paged } from "../types";
 import { Card } from "../components/ui";
 
 const SCOPES = [
+  { value: "replace", label: "Nicht mehr reparierbar", hint: "Datenverlust (zerstörte Cluster, fehlende Spielzeit, Bildfehler) – diese Dateien neu beschaffen bzw. neu rippen." },
+  { value: "repair", label: "Sollten repariert werden", hint: "Struktur- und Zeitstempelfehler ohne Datenverlust – per Remux mit mkvmerge behebbar." },
+  { value: "assessment", label: "Reparaturübersicht", hint: "Alle Dateien nach Empfehlung gruppiert: ersetzen, reparieren, kleinere Auffälligkeiten, nicht geprüft, in Ordnung." },
   { value: "library", label: "Gesamte Bibliothek", hint: "Alle Dateien mit Status (eine Zeile pro Datei)." },
   { value: "damaged", label: "Nur beschädigte Dateien", hint: "Kritisch und Fehler – inklusive Fehlerdetails. Grundlage für „Was muss ersetzt werden?“." },
   { value: "warnings", label: "Nur Warnungen", hint: "Auffällige Dateien ohne sicheren Defektnachweis." },
@@ -13,7 +16,7 @@ const SCOPES = [
 ];
 
 export function Reports() {
-  const [scope, setScope] = useState("damaged");
+  const [scope, setScope] = useState("replace");
   const [jobId, setJobId] = useState<number | "">("");
   const [libId, setLibId] = useState<number | "">("");
   const [details, setDetails] = useState<"auto" | "yes" | "no">("auto");
@@ -57,7 +60,7 @@ export function Reports() {
             )}
             <div><label className="label">Fehlerdetails</label>
               <select className="input" value={details} onChange={(e) => setDetails(e.target.value as typeof details)}>
-                <option value="auto">Automatisch (bei beschädigten Dateien und Scanläufen)</option>
+                <option value="auto">Automatisch (bei beschädigten Dateien und Scanläufen; Reparaturlisten ohne)</option>
                 <option value="yes">Immer – eine Zeile pro Befund</option>
                 <option value="no">Nie – eine Zeile pro Datei</option>
               </select>

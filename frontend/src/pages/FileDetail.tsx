@@ -121,6 +121,7 @@ export function FileDetailPage() {
             {!f.present && <span className="rounded bg-red-500/15 px-2 py-0.5 text-xs text-red-500">Nicht mehr vorhanden seit {fmtDate(f.missing_since)}</span>}
           </div>
           {f.status_note && <p className="mt-1 text-xs text-slate-500">{f.status_note}</p>}
+          <AssessmentBox a={f.assessment} />
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="btn-primary" onClick={() => setRecheck(true)} disabled={!f.present}><RefreshCw className="h-4 w-4" />Erneut prüfen</button>
@@ -238,6 +239,25 @@ export function FileDetailPage() {
       </Card>
       {recheck && <RecheckModal open onClose={() => setRecheck(false)} fileIds={[f.id]} onDone={() => qc.invalidateQueries({ queryKey: ["live"] })} />}
       {repair && <RepairDialog file={f} onClose={() => setRepair(false)} />}
+    </div>
+  );
+}
+
+const ASSESS_STYLE: Record<string, string> = {
+  replace: "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400",
+  repair: "border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  optional: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  ok: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  unchecked: "border-slate-500/40 bg-slate-500/10 text-slate-600 dark:text-slate-400",
+};
+
+function AssessmentBox({ a }: { a?: FileDetail["assessment"] }) {
+  if (!a) return null;
+  return (
+    <div className={`mt-2 max-w-3xl rounded border px-3 py-2 text-sm ${ASSESS_STYLE[a.category] ?? ""}`}>
+      <div className="font-semibold">Empfehlung: {a.label}</div>
+      {a.reasons.length > 0 && <div className="text-xs">{a.reason_text}</div>}
+      <div className="text-xs opacity-80">{a.action}</div>
     </div>
   );
 }

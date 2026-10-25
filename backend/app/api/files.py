@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import get_config
 from ..database import get_db
 from ..models import DetectedError, Library, MediaFile, MediaStream, ScanResult
+from ..services.repairability import assess
 from ..services import repair
 from ..services.labels import CHECK_LEVEL_LABELS, METHOD_LABELS, OUTCOME_LABELS, STATUS_LABELS, error_type_label
 from ..services.pathsec import is_within
@@ -185,6 +186,7 @@ def file_detail(file_id: int, db: Session = Depends(get_db)):
         errors = db.scalars(select(DetectedError).where(DetectedError.result_id.in_([r.id for r in current.values()]))
                             .order_by(DetectedError.time_start.is_(None), DetectedError.time_start, DetectedError.id)).all()
     history = db.scalars(select(ScanResult).where(ScanResult.file_id == f.id).order_by(ScanResult.id.desc()).limit(100)).all()
+    err_dicts = [_error_dict(e) for e in errors]
     return {
         **file_summary(f, libs),
         "quick_hash": f.quick_hash,
@@ -200,7 +202,8 @@ def file_detail(file_id: int, db: Session = Depends(get_db)):
             "decodable": s.decodable,
         } for s in streams],
         "current_results": {m: _result_dict(r) for m, r in current.items()},
-        "errors": [_error_dict(e) for e in errors],
+        "errors": err_dicts,
+        "assessment": assess(f.status, err_dicts),
         "history": [_result_dict(r) for r in history],
         "repair_enabled": repair.repair_enabled(),
         "repair_actions": repair.ACTIONS if repair.repair_enabled() else {},

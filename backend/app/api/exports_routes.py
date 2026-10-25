@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/export", tags=["Export"])
 @router.get("")
 def export(
     format: str = Query("csv", pattern="^(csv|json|html)$"),
-    scope: str = Query("library", pattern="^(library|damaged|warnings|job|file|filter)$"),
+    scope: str = Query("library", pattern="^(library|damaged|warnings|job|file|filter|assessment|repair|replace)$"),
     job_id: int | None = None,
     file_id: int | None = None,
     library_id: int | None = None,
