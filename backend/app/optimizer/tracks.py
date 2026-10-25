@@ -24,6 +24,9 @@ class Track:
     is_forced: bool
     channels: int | None
     sample_rate: int | None
+    size_bytes: int | None = None
+    size_source: str | None = None  # "tags" (exakt laut Statistik-Tags) | "bitrate" (Bitrate × Laufzeit)
+    bit_rate: int | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -129,4 +132,63 @@ async def identify(path: str, control: ScanControl | None = None, limits: Resour
         data = json.loads("\n".join(out))
     except json.JSONDecodeError:
         return Analysis(False, f"mkvmerge -J lieferte keine Ausgabe (Exit-Code {res.returncode})", None, None, [])
-    return parse_identify(data)
+    analysis = parse_identify(data)
+    if analysis.ok:
+        await enrich_sizes(analysis, path, control or ScanControl(), limits or ResourceLimits(nice=5))
+    return analysis
+
+
+# Codecs mit (nahezu) konstanter Bitrate: Bitrate × Laufzeit ist eine belastbare Schätzung
+CBR_FAMILIES = {"AC3", "EAC3", "DTS", "PCM", "MP2"}
+
+
+def _duration_tag(tags: dict) -> float | None:
+    for k, v in tags.items():
+        if k.upper().startswith("DURATION") and v:
+            try:
+                h, m, sec = str(v).split(":")
+                return int(h) * 3600 + int(m) * 60 + float(sec)
+            except ValueError:
+                return None
+    return None
+
+
+def apply_stream_sizes(analysis: Analysis, streams: list[dict]) -> None:
+    """Ergänzt Spurgrößen aus FFprobe-Streamdaten (Index = mkvmerge-Track-ID)."""
+    type_map = {"video": "video", "audio": "audio", "subtitles": "subtitle"}
+    by_index = {int(s.get("index", -1)): s for s in streams}
+    for t in analysis.tracks:
+        s = by_index.get(t.track_id)
+        if s is None or (t.type in type_map and s.get("codec_type") != type_map[t.type]):
+            continue  # Zuordnung nicht eindeutig -> keine Angabe
+        tags = {str(k).upper(): v for k, v in (s.get("tags") or {}).items()}
+        nob = next((v for k, v in tags.items() if k.startswith("NUMBER_OF_BYTES")), None)
+        bps = next((v for k, v in tags.items() if k == "BPS" or k.startswith("BPS-")), None)
+        try:
+            t.bit_rate = int(s.get("bit_rate")) if s.get("bit_rate") not in (None, "N/A") else (int(bps) if bps else None)
+        except (TypeError, ValueError):
+            t.bit_rate = None
+        if nob:
+            try:
+                t.size_bytes, t.size_source = int(nob), "tags"
+                continue
+            except ValueError:
+                pass
+        dur = _duration_tag(tags) or analysis.duration
+        if t.bit_rate and dur and (t.codec_family or "").upper() in CBR_FAMILIES:
+            t.size_bytes, t.size_source = int(t.bit_rate * dur / 8), "bitrate"
+
+
+async def enrich_sizes(analysis: Analysis, path: str, control: ScanControl, limits: ResourceLimits) -> None:
+    toolset = get_toolset()
+    if not toolset.ffprobe.available:
+        return
+    out: list[str] = []
+    res = await run_process([toolset.ffprobe.path or "ffprobe", "-v", "error", "-show_streams", "-of", "json",
+                             "file:" + path], control, limits, on_stdout=out.append)
+    if res.cancelled or res.returncode != 0:
+        return
+    try:
+        apply_stream_sizes(analysis, json.loads("\n".join(out)).get("streams") or [])
+    except json.JSONDecodeError:
+        return

@@ -387,3 +387,54 @@ def test_pause_and_resume_conversion(oclient, opt_env, multi_src, monkeypatch):
     j = wait_opt_job(oclient, job["id"], timeout=60)
     assert j["state"] == "completed" and j["done_files"] == 1
     assert (opt_env["output"] / "p.mkv").exists()
+
+
+# ---------------------------------------------------------------- Vorhersage der Ersparnis
+def test_size_sources(multi_src, tmp_path):
+    _, a = sig(multi_src)  # mit FFmpeg erzeugt: keine Statistik-Tags
+    by = {t.track_id: t for t in a.tracks}
+    assert by[1].size_source == "bitrate" and by[2].size_source == "bitrate"  # AC3/DTS: konstante Bitrate
+    assert by[3].size_bytes is None  # AAC ohne Tags (variable Bitrate): nicht geschätzt
+    mm = mf.make_mkv_mkvmerge(multi_src, tmp_path / "mm.mkv")
+    _, a2 = sig(mm)  # mkvmerge schreibt Statistik-Tags
+    assert all(t.size_source == "tags" and t.size_bytes is not None for t in a2.tracks)
+
+
+def test_prediction_partial_when_sizes_unknown(multi_src):
+    from app.optimizer.rules import FileOps, Rules, compute_plan
+    _, a = sig(multi_src)
+    plan = compute_plan(a, Rules(**RULES_DTS), FileOps())
+    ac3 = next(t for t in a.audio if t.codec_family == "AC3")
+    assert plan.predicted_saved == ac3.size_bytes  # AC3 bekannt, AAC/SRT unbekannt
+    assert plan.predicted_unknown == 2 and not plan.predicted_exact
+
+
+def test_prediction_matches_actual_saving(oclient, opt_env, multi_src, tmp_path):
+    src = mf.make_mkv_mkvmerge(multi_src, opt_env["media"] / "tags.mkv")
+    analyze(oclient)
+    pv = oclient.post("/api/optimizer/preview", json={"library_id": 1, "kind": "remux", "rules": RULES_DTS}).json()
+    item = pv["items"][0]
+    assert item["plan"]["predicted_exact"] and item["plan"]["predicted_unknown"] == 0
+    predicted = item["plan"]["predicted_saved"]
+    assert pv["prediction"]["saved"] == predicted and pv["predictions"][str(item["file_id"])] == predicted
+    job = oclient.post("/api/optimizer/jobs", json={"kind": "remux", "file_ids": [item["file_id"]], "rules": RULES_DTS}).json()
+    assert job["predicted_saved"] == predicted
+    j = wait_opt_job(oclient, job["id"])
+    actual = src.stat().st_size - (opt_env["output"] / "tags.mkv").stat().st_size
+    # Abweichung nur durch Container-Overhead (Blockköpfe, Index)
+    assert abs(actual - predicted) <= max(0.03 * predicted, 64 * 1024), (actual, predicted)
+    assert j["saved_bytes"] == actual
+    it = oclient.get(f"/api/optimizer/jobs/{job['id']}/items").json()["items"][0]
+    assert it["predicted_saved"] == predicted
+
+
+def test_audio_prediction(oclient, opt_env, multi_src):
+    mf.copy(multi_src, opt_env["media"] / "a.mkv")
+    analyze(oclient)
+    profiles = oclient.get("/api/optimizer/profiles").json()
+    rep = next(p for p in profiles if p["builtin"] and p["mode"] == "replace" and p["codec"] == "ac3" and "DTS" in p["source_codecs"])
+    add = next(p for p in profiles if p["builtin"] and p["mode"] == "add" and p["codec"] == "aac")
+    pv = oclient.post("/api/optimizer/preview", json={"library_id": 1, "kind": "audio", "profile_id": rep["id"]}).json()
+    assert pv["items"][0]["plan"]["predicted_saved"] > 0  # DTS 1411 kbit/s -> AC3 640 kbit/s
+    pv = oclient.post("/api/optimizer/preview", json={"library_id": 1, "kind": "audio", "profile_id": add["id"]}).json()
+    assert pv["items"][0]["plan"]["predicted_saved"] < 0  # zusätzliche Spur: Datei wird größer

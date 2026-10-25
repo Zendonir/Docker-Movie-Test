@@ -340,6 +340,7 @@ class OptimizerAnalysis(Base):
 
     file_id: Mapped[int] = mapped_column(ForeignKey("media_files.id", ondelete="CASCADE"), primary_key=True)
     fingerprint_version: Mapped[int] = mapped_column(Integer)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     analyzed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     ok: Mapped[bool] = mapped_column(Boolean, default=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -370,6 +371,9 @@ class OptimizerTrack(Base):
     is_forced: Mapped[bool] = mapped_column(Boolean, default=False)
     channels: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    size_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    bit_rate: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
 
 class OptimizerProfile(Base):

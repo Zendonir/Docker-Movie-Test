@@ -121,6 +121,10 @@ class AudioPlan:
     mode: str = "replace"
     skip_reason: str | None = None
     track_order: list[str] = field(default_factory=list)  # "datei:track"
+    # Vorhersage der Größenänderung (positiv = Ersparnis, negativ = Datei wird größer)
+    predicted_saved: int | None = None
+    predicted_exact: bool = False
+    predicted_unknown: int = 0
 
     @property
     def changed(self) -> bool:
@@ -157,6 +161,7 @@ def compute_audio_plan(analysis: Analysis, profile: dict) -> AudioPlan:
     if not plan.conversions:
         plan.skip_reason = "Keine passende Audiospur für dieses Profil"
         return plan
+    _predict_audio(plan, analysis, profile)
     conv_index = {c.track_id: i + 1 for i, c in enumerate(plan.conversions)}
     for t in analysis.tracks:
         if t.track_id in conv_index:
@@ -167,6 +172,27 @@ def compute_audio_plan(analysis: Analysis, profile: dict) -> AudioPlan:
         else:
             plan.track_order.append(f"0:{t.track_id}")
     return plan
+
+
+def _predict_audio(plan: AudioPlan, analysis: Analysis, profile: dict) -> None:
+    """Neue Spurgröße = Zielbitrate × Laufzeit; FLAC (variable Größe) ist nicht vorhersagbar."""
+    by_id = {t.track_id: t for t in analysis.tracks}
+    total, unknown = 0, 0
+    codec = profile["codec"]
+    bitrate = profile.get("bitrate_kbps") if CODECS[codec]["bitrate"] else None
+    if bitrate:
+        lo, hi = CODECS[codec]["bitrate"]
+        bitrate = max(lo, min(hi, int(bitrate)))
+    for c in plan.conversions:
+        src = by_id.get(c.track_id)
+        new = int(bitrate * 1000 * analysis.duration / 8) if bitrate and analysis.duration else None
+        if new is None or (plan.mode == "replace" and (src is None or src.size_bytes is None)):
+            unknown += 1
+            continue
+        total += (src.size_bytes - new) if plan.mode == "replace" else -new
+    plan.predicted_unknown = unknown
+    plan.predicted_saved = total if unknown < len(plan.conversions) else None
+    plan.predicted_exact = False  # Encoderausgabe ist immer eine Schätzung
 
 
 def ffmpeg_encode_cmd(src: str, track_id: int, conv: Conversion, profile: dict, out: str) -> list[str]:

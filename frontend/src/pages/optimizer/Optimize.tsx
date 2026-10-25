@@ -7,7 +7,7 @@ import { fmtBytes, fmtInt } from "../../format";
 import type { Choice, OptFile, OptPreview, OptRules, TrackRule } from "../../types";
 import { Card, Empty, ErrorBox, Loading, Modal, Pagination } from "../../components/ui";
 import { useToast } from "../../components/toast";
-import { CommandModal, ContextMenu, Folder, FolderPicker, OUTPUT_MODE_HINT, SearchButton, TagInput, TrackChip, planBadge, useOptStatus } from "./common";
+import { CommandModal, ContextMenu, Folder, FolderPicker, OUTPUT_MODE_HINT, Saving, SearchButton, TagInput, TrackChip, planBadge, sumPredictions, useOptStatus } from "./common";
 
 const EMPTY_RULE: TrackRule = { mode: "language", languages: [], codecs: [], track_ids: [] };
 
@@ -102,6 +102,7 @@ export function OptimizeTab() {
   const selectAllPage = () => setSelected(new Set([...selected, ...items.map((i) => i.file_id)]));
   const selectedChanged = useMemo(() => [...selected].filter((id) => p?.changed_ids.includes(id)).length, [selected, p]);
   const mode = status.data?.ops.output_mode ?? "output_dir";
+  const selPred = useMemo(() => sumPredictions(selected, p?.predictions), [selected, p]);
 
   if (status.isLoading || !rules) return <Loading />;
   const choices = p?.choices;
@@ -140,6 +141,13 @@ export function OptimizeTab() {
             <b>{fmtInt(p?.total ?? 0)}</b> Dateien · <span className="text-emerald-600 dark:text-emerald-400">{fmtInt(p?.changed_ids.length ?? 0)} mit Änderungen</span>
             {p && p.unanalyzed > 0 && <span className="text-amber-500"> · {fmtInt(p.unanalyzed)} noch nicht analysiert</span>}
             {selected.size > 0 && <> · <b>{fmtInt(selected.size)}</b> markiert</>}
+            {p && p.changed_ids.length > 0 && (
+              <div className="mt-0.5 text-xs text-slate-500">
+                Voraussichtlich eingespart: <Saving bytes={p.prediction.saved} exact={p.prediction.exact} compact /> bei allen Dateien mit Änderungen
+                {selected.size > 0 && <> · markiert: <Saving bytes={selPred.bytes} compact /></>}
+                {p.prediction.files_with_unknown > 0 && <> · {fmtInt(p.prediction.files_with_unknown)} Datei(en) nur teilweise vorhersagbar</>}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={onlyChanged} onChange={(e) => { setOnlyChanged(e.target.checked); setPage(1); }} />nur Dateien mit Änderungen</label>
@@ -153,7 +161,7 @@ export function OptimizeTab() {
           <table className="w-full min-w-[900px]">
             <thead className="bg-slate-50 dark:bg-slate-900/60"><tr>
               <th className="th w-8"><input type="checkbox" checked={items.length > 0 && items.every((i) => selected.has(i.file_id))} onChange={(e) => e.target.checked ? selectAllPage() : setSelected(new Set([...selected].filter((id) => !items.some((i) => i.file_id === id))))} /></th>
-              <th className="th">Datei</th><th className="th">Größe</th><th className="th">Audio</th><th className="th">Untertitel</th><th className="th">Ergebnis</th>
+              <th className="th">Datei</th><th className="th">Größe</th><th className="th">Audio</th><th className="th">Untertitel</th><th className="th">Ersparnis</th><th className="th">Ergebnis</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {items.map((f) => {
@@ -166,6 +174,7 @@ export function OptimizeTab() {
                     <td className="td whitespace-nowrap text-xs tabular-nums">{fmtBytes(f.size)}</td>
                     <td className="td"><div className="flex flex-wrap gap-1">{f.tracks.filter((t) => t.type === "audio").map((t) => <TrackChip key={t.id} t={t} keep={show(t.id)} />)}</div></td>
                     <td className="td"><div className="flex flex-wrap gap-1">{f.tracks.filter((t) => t.type === "subtitles").map((t) => <TrackChip key={t.id} t={t} keep={show(t.id)} />)}</div></td>
+                    <td className="td">{f.plan?.changed ? <Saving bytes={f.plan.predicted_saved} exact={f.plan.predicted_exact} unknown={f.plan.predicted_unknown} /> : <span className="text-xs text-slate-400">–</span>}</td>
                     <td className="td">{planBadge(f.plan, f.analyzed, f.ok)}{f.status === "critical" || f.status === "error" ? <div className="text-[11px] text-red-500">Integritätsfehler</div> : null}</td>
                   </tr>
                 );
@@ -189,6 +198,7 @@ export function OptimizeTab() {
           footer={<><button className="btn-secondary" onClick={() => setConfirm(false)}>Abbrechen</button><button className={mode.startsWith("replace") ? "btn-danger" : "btn-primary"} disabled={create.isPending} onClick={() => create.mutate()}>Konvertieren</button></>}>
           <div className="space-y-2 text-sm">
             <p><b>{fmtInt(selectedChanged)}</b> Datei(en) werden mit mkvmerge neu geschrieben (ohne Neucodierung).</p>
+            <p>Voraussichtliche Ersparnis: <Saving bytes={selPred.bytes} compact />{selPred.unknown > 0 && <span className="text-xs text-slate-500"> (für {selPred.unknown} Datei(en) nicht vorhersagbar)</span>}{mode === "output_dir" || mode === "beside" ? <span className="text-xs text-slate-500"> – wird erst frei, wenn die Originale ersetzt werden.</span> : null}</p>
             <p className={mode.startsWith("replace") ? "font-medium text-red-500" : ""}>{OUTPUT_MODE_HINT[mode]}</p>
             <p className="text-xs text-slate-500">Jede neue Datei wird vor dem Abschluss geprüft. Dateien mit Integritätsfehlern werden übersprungen (abschaltbar).</p>
           </div>

@@ -158,11 +158,19 @@ def preview(body: PreviewIn, db: Session = Depends(get_db)):
         rows = [r for r in rows if r[2] and r[2]["changed"]]
     choices = collect_choices([a for _, a, _ in rows if a is not None and a.ok])
     changed_ids = [f.id for f, _, p in rows if p and p["changed"]]
+    # Vorhersage je Datei (nur bekannte Größen); None = nicht vorhersagbar
+    predictions = {f.id: p.get("predicted_saved") for f, _, p in rows if p and p["changed"]}
+    prediction = {
+        "saved": sum(v for v in predictions.values() if v),
+        "files_with_unknown": sum(1 for f, _, p in rows if p and p["changed"] and (p.get("predicted_unknown") or 0) > 0),
+        "exact": all(p.get("predicted_exact") for _, _, p in rows if p and p["changed"]),
+    }
     unanalyzed = sum(1 for _, a, _ in rows if a is None)
     start = (body.page - 1) * body.page_size
     page_rows = rows[start:start + body.page_size]
     return {
         "total": len(rows), "changed_ids": changed_ids, "unanalyzed": unanalyzed, "choices": choices,
+        "predictions": predictions, "prediction": prediction,
         "items": [{
             "file_id": f.id, "filename": f.filename, "directory": f.directory, "size": f.size, "status": f.status,
             "analyzed": a is not None, "ok": a.ok if a else None, "error": a.error if a else None,
@@ -233,7 +241,9 @@ def job_dict(j: OptimizerJob) -> dict:
             "finished_at": j.finished_at, "total_files": j.total_files, "done_files": j.done_files,
             "skipped_files": j.skipped_files, "failed_files": j.failed_files, "total_bytes": j.total_bytes,
             "done_bytes": j.done_bytes, "saved_bytes": j.saved_bytes, "resume_count": j.resume_count,
-            "output_mode": (j.params.get("ops") or {}).get("output_mode"), "message": j.message}
+            "output_mode": (j.params.get("ops") or {}).get("output_mode"), "message": j.message,
+            "predicted_saved": j.params.get("predicted_saved"),
+            "predicted_unknown_files": j.params.get("predicted_unknown_files", 0)}
 
 
 @router.post("/jobs", status_code=201)
@@ -275,6 +285,23 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
     if conflict:
         raise HTTPException(409, f"{len(conflict)} Datei(en) sind bereits in einem aktiven Optimizer-Auftrag, "
                                  f"z. B. {conflict[0]}")
+    # Vorhersage aus den zwischengespeicherten Analysen (wird bei der Ausführung neu berechnet)
+    analyses = service.load_analyses(db, files)
+    pred_total, pred_unknown = 0, 0
+    for f in files:
+        a = analyses.get(f.id)
+        if a is None:
+            pred_unknown += 1
+            continue
+        pl = compute_plan(a, Rules(**params["rules"]), ops) if body.kind == "remux" else \
+            compute_audio_plan(a, params["profile"])
+        if pl.skip_reason:
+            continue
+        pred_total += pl.predicted_saved or 0
+        if pl.predicted_unknown or pl.predicted_saved is None:
+            pred_unknown += 1
+    params["predicted_saved"] = pred_total
+    params["predicted_unknown_files"] = pred_unknown
     job = OptimizerJob(kind=body.kind, name=name[:300], state="queued", params=params, total_files=len(files),
                        total_bytes=sum(f.size for f in files), events=[])
     db.add(job)
@@ -324,6 +351,8 @@ def job_items(job_id: int, db: Session = Depends(get_db), state: str | None = No
         "id": it.id, "file_id": it.file_id, "name": it.source_path.rsplit("/", 1)[-1], "source_path": it.source_path,
         "state": it.state, "size": it.size, "output_path": it.output_path, "output_size": it.output_size,
         "backup_path": it.backup_path, "message": it.message, "duration_s": it.duration_s, "attempts": it.attempts,
+        "predicted_saved": (it.plan or {}).get("predicted_saved"),
+        "predicted_exact": (it.plan or {}).get("predicted_exact", False),
         "finished_at": it.finished_at} for it in rows]}
 
 

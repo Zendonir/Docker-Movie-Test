@@ -7,12 +7,13 @@ import { fmtBytes, fmtDate, fmtEta, fmtInt, fmtPct, fmtSpeed, JOB_STATE_LABELS }
 import type { OptJob, OptLiveJob, Paged } from "../../types";
 import { Card, Empty, Modal, Pagination, ProgressBar } from "../../components/ui";
 import { useToast } from "../../components/toast";
+import { Saving } from "./common";
 import { STATE_CLS } from "../Scans";
 
 const ITEM_STATES: Record<string, string> = { pending: "Ausstehend", running: "Läuft", done: "Erledigt", skipped: "Übersprungen", failed: "Fehlgeschlagen", cancelled: "Abgebrochen" };
 const ITEM_CLS: Record<string, string> = { done: "text-emerald-500", failed: "text-red-500", skipped: "text-slate-500", cancelled: "text-slate-500", running: "text-sky-500", pending: "text-slate-400" };
 
-interface Item { id: number; file_id: number | null; name: string; source_path: string; state: string; size: number; output_path: string | null; output_size: number | null; backup_path: string | null; message: string | null; duration_s: number | null; attempts: number }
+interface Item { id: number; file_id: number | null; name: string; source_path: string; state: string; size: number; output_path: string | null; output_size: number | null; backup_path: string | null; message: string | null; duration_s: number | null; attempts: number; predicted_saved: number | null; predicted_exact: boolean }
 interface JobDetail extends OptJob { item_counts: Record<string, number>; events: { ts: string; level: string; message: string }[] }
 
 function Actions({ job }: { job: { id: number; state: string } }) {
@@ -42,7 +43,7 @@ function LiveCard({ j }: { j: OptLiveJob }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="font-medium">#{j.id} {j.name}</div>
-          <div className="text-xs text-slate-500">{JOB_STATE_LABELS[j.state] ?? j.state} · {fmtInt(j.done_files + j.skipped_files + j.failed_files)} / {fmtInt(j.total_files)} Dateien{j.saved_bytes ? ` · ${fmtBytes(j.saved_bytes)} eingespart` : ""}</div>
+          <div className="text-xs text-slate-500">{JOB_STATE_LABELS[j.state] ?? j.state} · {fmtInt(j.done_files + j.skipped_files + j.failed_files)} / {fmtInt(j.total_files)} Dateien{j.saved_bytes ? ` · ${fmtBytes(j.saved_bytes)} eingespart` : ""}{j.predicted_saved != null && <> · Vorhersage <Saving bytes={j.predicted_saved} compact /></>}</div>
         </div>
         <Actions job={j} />
       </div>
@@ -91,7 +92,9 @@ function JobItems({ jobId }: { jobId: number }) {
                     {it.output_path && <div className="text-[11px] text-slate-500 [overflow-wrap:anywhere]">→ {it.output_path}</div>}
                     {it.backup_path && <div className="text-[11px] text-slate-500 [overflow-wrap:anywhere]">Sicherung: {it.backup_path}</div>}</td>
                   <td className={`td text-xs ${ITEM_CLS[it.state] ?? ""}`}>{ITEM_STATES[it.state] ?? it.state}{it.attempts > 1 ? ` (${it.attempts}.)` : ""}</td>
-                  <td className="td whitespace-nowrap text-xs tabular-nums">{fmtBytes(it.size)}{it.output_size != null && <div className="text-slate-500">→ {fmtBytes(it.output_size)}</div>}</td>
+                  <td className="td whitespace-nowrap text-xs tabular-nums">{fmtBytes(it.size)}{it.output_size != null && <div className="text-slate-500">→ {fmtBytes(it.output_size)}</div>}
+                    {it.predicted_saved != null && <div title="Vorhersage vor der Bearbeitung">Vorhersage <Saving bytes={it.predicted_saved} exact={it.predicted_exact} compact /></div>}
+                    {it.output_size != null && <div title="Tatsächliche Änderung">tatsächlich <Saving bytes={it.size - it.output_size} exact compact /></div>}</td>
                   <td className="td text-xs">{it.message}{it.duration_s != null && <div className="text-slate-500">{Math.round(it.duration_s)} s</div>}</td>
                   <td className="td"><button className="btn-ghost p-1" title="Protokoll" onClick={() => setLog(it.id)}><FileText className="h-4 w-4" /></button></td>
                 </tr>
@@ -142,7 +145,7 @@ export function JobsTab() {
                   <td className="td font-medium">{j.name}<div className="text-[11px] text-slate-500">{j.kind === "remux" ? "Spuren entfernen" : "Audiokonvertierung"}{j.resume_count ? ` · ${j.resume_count}× fortgesetzt` : ""}</div></td>
                   <td className="td"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATE_CLS[j.state] ?? ""}`}>{JOB_STATE_LABELS[j.state] ?? j.state}</span></td>
                   <td className="td text-xs tabular-nums">{fmtInt(j.done_files)} erledigt · {fmtInt(j.skipped_files)} übersprungen{j.failed_files ? <span className="text-red-500"> · {j.failed_files} fehlgeschl.</span> : null}</td>
-                  <td className="td text-xs tabular-nums">{j.saved_bytes ? fmtBytes(j.saved_bytes) : "–"}</td>
+                  <td className="td text-xs tabular-nums">{j.saved_bytes ? fmtBytes(j.saved_bytes) : "–"}{j.predicted_saved != null && <div className="text-slate-500">Vorhersage <Saving bytes={j.predicted_saved} compact />{j.predicted_unknown_files ? ` (+${j.predicted_unknown_files} unbek.)` : ""}</div>}</td>
                   <td className="td text-xs">{({ output_dir: "Ausgabeordner", beside: "neben Original", replace_backup: "ersetzt (Sicherung)", replace_delete: "ersetzt" } as Record<string, string>)[j.output_mode] ?? j.output_mode}</td>
                   <td className="td text-xs">{fmtDate(j.created_at, true)}</td>
                   <td className="td" onClick={(e) => e.stopPropagation()}><Actions job={j} /></td>

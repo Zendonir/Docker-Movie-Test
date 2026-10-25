@@ -21,6 +21,9 @@ from .tracks import Analysis, Track, identify
 
 log = logging.getLogger(__name__)
 
+# Erhöhen, wenn die Analyse neue Angaben liefert – ältere Einträge werden dann beim Suchen neu erstellt
+ANALYSIS_VERSION = 2
+
 
 def dir_filter(q, rel_dir: str, recursive: bool):
     rel_dir = rel_dir.strip("/")
@@ -46,7 +49,8 @@ def store_analysis(db: Session, mf: MediaFile, a: Analysis) -> None:
     if old is not None:
         db.delete(old)
         db.flush()
-    row = OptimizerAnalysis(file_id=mf.id, fingerprint_version=mf.fingerprint_version, ok=a.ok, error=a.error,
+    row = OptimizerAnalysis(file_id=mf.id, fingerprint_version=mf.fingerprint_version,
+                            analysis_version=ANALYSIS_VERSION, ok=a.ok, error=a.error,
                             duration=a.duration, title=a.title, audio_count=len(a.audio),
                             subtitle_count=len(a.subtitles), analyzed_at=utcnow())
     db.add(row)
@@ -58,7 +62,8 @@ def store_analysis(db: Session, mf: MediaFile, a: Analysis) -> None:
 def analysis_from_db(row: OptimizerAnalysis) -> Analysis:
     tracks = [Track(track_id=t.track_id, type=t.type, codec=t.codec, codec_id=t.codec_id, codec_family=t.codec_family,
                     language=t.language, language_ietf=t.language_ietf, name=t.name, is_default=t.is_default,
-                    is_forced=t.is_forced, channels=t.channels, sample_rate=t.sample_rate) for t in row.tracks]
+                    is_forced=t.is_forced, channels=t.channels, sample_rate=t.sample_rate,
+                    size_bytes=t.size_bytes, size_source=t.size_source, bit_rate=t.bit_rate) for t in row.tracks]
     return Analysis(row.ok, row.error, row.duration, row.title, tracks)
 
 
@@ -71,7 +76,7 @@ def load_analyses(db: Session, files: list[MediaFile]) -> dict[int, Analysis]:
     ids = list(versions)
     for start in range(0, len(ids), 500):
         for row in db.scalars(select(OptimizerAnalysis).where(OptimizerAnalysis.file_id.in_(ids[start:start + 500]))):
-            if row.fingerprint_version == versions[row.file_id]:
+            if row.fingerprint_version == versions[row.file_id] and row.analysis_version == ANALYSIS_VERSION:
                 out[row.file_id] = analysis_from_db(row)
     return out
 

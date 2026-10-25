@@ -7,7 +7,7 @@ import { fmtBytes, fmtInt } from "../../format";
 import type { OptFile, OptPreview, OptProfile } from "../../types";
 import { Empty, ErrorBox, Loading, Modal, Pagination, Card } from "../../components/ui";
 import { useToast } from "../../components/toast";
-import { CommandModal, ContextMenu, Folder, FolderPicker, OUTPUT_MODE_HINT, SearchButton, TrackChip, planBadge, useOptStatus } from "./common";
+import { CommandModal, ContextMenu, Folder, FolderPicker, OUTPUT_MODE_HINT, Saving, SearchButton, TrackChip, planBadge, sumPredictions, useOptStatus } from "./common";
 
 export function AudioTab() {
   const status = useOptStatus();
@@ -39,6 +39,7 @@ export function AudioTab() {
   const toggle = (id: number) => { const n = new Set(selected); if (n.has(id)) n.delete(id); else n.add(id); setSelected(n); };
   const selChanged = [...selected].filter((id) => p?.changed_ids.includes(id)).length;
   const mode = status.data?.ops.output_mode ?? "output_dir";
+  const selPred = sumPredictions(selected, p?.predictions);
   if (profiles.isLoading || status.isLoading) return <Loading />;
   return (
     <div className="space-y-4">
@@ -65,7 +66,8 @@ export function AudioTab() {
 
       <div className="card overflow-hidden" onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-          <div className="text-sm"><b>{fmtInt(p?.total ?? 0)}</b> Dateien · <span className="text-sky-500">{fmtInt(p?.changed_ids.length ?? 0)} mit passenden Spuren</span>{p && p.unanalyzed > 0 && <span className="text-amber-500"> · {fmtInt(p.unanalyzed)} nicht analysiert</span>}</div>
+          <div className="text-sm"><b>{fmtInt(p?.total ?? 0)}</b> Dateien · <span className="text-sky-500">{fmtInt(p?.changed_ids.length ?? 0)} mit passenden Spuren</span>{p && p.unanalyzed > 0 && <span className="text-amber-500"> · {fmtInt(p.unanalyzed)} nicht analysiert</span>}
+            {p && p.changed_ids.length > 0 && <div className="mt-0.5 text-xs text-slate-500">Voraussichtliche Größenänderung: <Saving bytes={p.prediction.saved} compact /> bei allen passenden Dateien{selected.size > 0 && <> · markiert: <Saving bytes={selPred.bytes} compact /></>}</div>}</div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={onlyChanged} onChange={(e) => { setOnlyChanged(e.target.checked); setPage(1); }} />nur Dateien mit passenden Spuren</label>
             <button className="btn-secondary" onClick={() => setSelected(new Set(p?.changed_ids ?? []))}>Alle markieren</button>
@@ -76,7 +78,7 @@ export function AudioTab() {
         <ErrorBox error={preview.error} />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px]">
-            <thead className="bg-slate-50 dark:bg-slate-900/60"><tr><th className="th w-8" /><th className="th">Datei</th><th className="th">Größe</th><th className="th">Audiospuren</th><th className="th">Ergebnis</th></tr></thead>
+            <thead className="bg-slate-50 dark:bg-slate-900/60"><tr><th className="th w-8" /><th className="th">Datei</th><th className="th">Größe</th><th className="th">Audiospuren</th><th className="th">Größe danach</th><th className="th">Ergebnis</th></tr></thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {items.map((f) => {
                 const conv = new Set((f.plan?.conversions ?? []).map((c) => c.track_id));
@@ -88,6 +90,7 @@ export function AudioTab() {
                     <td className="td"><div className="flex flex-wrap gap-1">{f.tracks.filter((t) => t.type === "audio").map((t) => <TrackChip key={t.id} t={t} convert={conv.has(t.id)} />)}</div>
                       {(f.plan?.conversions ?? []).map((c) => <div key={c.track_id} className="text-[11px] text-sky-500">#{c.track_id} → {c.track_name} ({f.plan?.mode === "add" ? "zusätzlich" : "ersetzt"})</div>)}
                     </td>
+                    <td className="td">{f.plan?.changed ? <Saving bytes={f.plan.predicted_saved} unknown={f.plan.predicted_unknown} /> : <span className="text-xs text-slate-400">–</span>}</td>
                     <td className="td">{planBadge(f.plan, f.analyzed, f.ok)}</td>
                   </tr>
                 );
@@ -108,6 +111,7 @@ export function AudioTab() {
           footer={<><button className="btn-secondary" onClick={() => setConfirm(false)}>Abbrechen</button><button className={mode.startsWith("replace") ? "btn-danger" : "btn-primary"} disabled={create.isPending} onClick={() => create.mutate()}>Konvertieren</button></>}>
           <div className="space-y-2 text-sm">
             <p><b>{fmtInt(selChanged)}</b> Datei(en) mit Profil „{profile?.name}“. FFmpeg codiert nur die betroffenen Spuren, mkvmerge setzt die Datei verlustfrei neu zusammen.</p>
+            <p>Voraussichtliche Größenänderung: <Saving bytes={selPred.bytes} compact /> <span className="text-xs text-slate-500">(„+“ = Dateien werden größer, z. B. bei „zusätzlich“)</span></p>
             <p className={mode.startsWith("replace") ? "font-medium text-red-500" : ""}>{OUTPUT_MODE_HINT[mode]}</p>
           </div>
         </Modal>

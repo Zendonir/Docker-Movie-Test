@@ -2,7 +2,7 @@ import { KeyboardEvent, ReactNode, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, Search, Square, X } from "lucide-react";
 import { api, post, qs } from "../../api";
-import { fmtInt } from "../../format";
+import { fmtBytes, fmtInt } from "../../format";
 import type { AnalyzeState, Choice, OptPlan, OptStatus, OptTrack } from "../../types";
 import { ErrorBox, Modal, ProgressBar, Spinner } from "../../components/ui";
 import { useToast } from "../../components/toast";
@@ -266,3 +266,30 @@ export const OUTPUT_MODE_HINT: Record<string, string> = {
   replace_backup: "Originale werden ersetzt und in den Sicherungsordner verschoben.",
   replace_delete: "Originale werden ersetzt und gelöscht!",
 };
+
+/** Vorhersage der Speicheränderung: positiv = Ersparnis, negativ = Datei wird größer. */
+export function Saving({ bytes, exact, unknown, compact }: { bytes: number | null | undefined; exact?: boolean; unknown?: number; compact?: boolean }) {
+  if (bytes == null) return <span className="text-xs text-slate-500" title="Für die betroffenen Spuren liegen keine Größenangaben vor (keine Statistik-Tags, variable Bitrate)">nicht vorhersagbar</span>;
+  const grows = bytes < 0;
+  const txt = grows ? `${exact ? "" : "ca. "}+${fmtBytes(-bytes)} größer` : `${exact ? "" : "ca. "}${fmtBytes(bytes)}`;
+  const title = exact
+    ? "Exakt laut Statistik-Tags der Spuren (Container-Overhead nicht berücksichtigt)"
+    : "Geschätzt aus Bitrate × Laufzeit bzw. Statistik-Tags" + (unknown ? ` – ${unknown} Spur(en) ohne Größenangabe nicht berücksichtigt` : "");
+  return (
+    <span className={`whitespace-nowrap text-xs tabular-nums ${grows ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400"}`} title={title}>
+      {txt}{!compact && unknown ? <span className="text-slate-500"> (+{unknown} unbek.)</span> : null}
+    </span>
+  );
+}
+
+export function sumPredictions(ids: Iterable<number>, predictions: Record<string, number | null> | undefined): { bytes: number; unknown: number } {
+  let bytes = 0;
+  let unknown = 0;
+  for (const id of ids) {
+    const v = predictions?.[String(id)];
+    if (v === undefined) continue;
+    if (v == null) unknown++;
+    else bytes += v;
+  }
+  return { bytes, unknown };
+}

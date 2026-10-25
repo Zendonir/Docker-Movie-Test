@@ -87,6 +87,10 @@ class RemuxPlan:
     changed: bool = False
     skip_reason: str | None = None
     warnings: list[str] = field(default_factory=list)
+    # Vorhersage: Summe der bekannten Größen entfernter Spuren (Container-Overhead nicht berücksichtigt)
+    predicted_saved: int | None = None
+    predicted_exact: bool = False  # alle Größen aus Statistik-Tags
+    predicted_unknown: int = 0  # entfernte Spuren ohne Größenangabe
 
     @property
     def kept(self) -> list[int]:
@@ -171,6 +175,7 @@ def compute_plan(analysis: Analysis, rules: Rules, ops: FileOps) -> RemuxPlan:
         plan.skip_reason = "Es bliebe keine Audiospur übrig – Datei wird nicht verändert"
         return plan
     plan.changed = bool(plan.removed)
+    predict_savings(plan, analysis)
     if not plan.changed:
         plan.skip_reason = "Keine Spur zu entfernen"
         return plan
@@ -191,6 +196,14 @@ def compute_plan(analysis: Analysis, rules: Rules, ops: FileOps) -> RemuxPlan:
         if order != [t.track_id for t in kept]:
             plan.track_order = order
     return plan
+
+
+def predict_savings(plan: RemuxPlan, analysis: Analysis) -> None:
+    removed = [t for t in analysis.tracks if t.track_id in set(plan.removed)]
+    known = [t for t in removed if t.size_bytes is not None]
+    plan.predicted_unknown = len(removed) - len(known)
+    plan.predicted_saved = sum(t.size_bytes for t in known) if known else (0 if not removed else None)
+    plan.predicted_exact = bool(removed) and all(t.size_source == "tags" for t in removed)
 
 
 def mkvmerge_args(plan: RemuxPlan, analysis: Analysis, ops: FileOps) -> list[str]:

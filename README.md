@@ -342,6 +342,20 @@ MKVToolNix und FFmpeg sind im Image enthalten, eine Pfadangabe ist nicht nötig.
    (Ersatz für das Öffnen der mkvmerge-GUI). **Rechtsklick** öffnet ein Kontextmenü zum Markieren.
 5. Dateien markieren → **Konvertieren**. mkvmerge schreibt ohne Neucodierung.
 
+**Vorhersage der Ersparnis:** Die Spalte „Ersparnis“ und die Zusammenfassung über der Liste zeigen, wie viel
+Speicher das Entfernen der Spuren voraussichtlich freigibt – für alle Dateien mit Änderungen und für die markierten.
+Grundlage sind die tatsächlichen Spurgrößen, ohne die Datei komplett zu lesen:
+
+* **exakt** aus den Statistik-Tags (`NUMBER_OF_BYTES`), die mkvmerge in nahezu jede MKV schreibt,
+* **ca.** aus Bitrate × Laufzeit bei Codecs mit konstanter Bitrate (AC3, E-AC3, DTS, PCM),
+* Spuren ohne beide Angaben (z. B. AAC aus FFmpeg ohne Tags) werden nicht geschätzt und als „unbek.“ ausgewiesen.
+
+Die Abweichung zur tatsächlichen Ersparnis entsteht nur durch Container-Overhead (Blockköpfe, Index) und liegt
+bei exakten Angaben typischerweise unter 1 %. Bei der Audiokonvertierung wird die neue Größe aus Zielbitrate ×
+Laufzeit geschätzt („+ … größer“ bei zusätzlichen Spuren). Im Auftrag stehen Vorhersage und tatsächliche
+Ersparnis je Datei nebeneinander. Im Modus „Ausgabeverzeichnis“ bzw. „neben dem Original“ wird der Speicher erst
+frei, wenn die Originale ersetzt werden.
+
 Sicherheitsregeln: Eine Datei wird nie ohne Audiospur geschrieben; *geschützte Sprachen* (Standard: GER) werden
 nie vollständig entfernt; Dateien ohne Änderung werden nicht angefasst; wird die bisherige Standard-Audiospur
 entfernt, wird die erste verbleibende Spur Standard (abschaltbar).
@@ -527,7 +541,7 @@ Alle Testmedien werden mit FFmpeg erzeugt und gezielt beschädigt (`tests/media_
 | `test_scan_pipeline.py` | alle Modi über API und Worker: fehlerfreie MKV/MP4/TS, beschädigte Cluster (B), Decoderfehler (C), abgeschnitten, Header, Zeitsprung, beschädigter TS, nicht unterstützter Codec (H), Originale unverändert, inkrementeller Scan (E), Filter + CSV/JSON/HTML-Export mit Umlauten (F), Schnellprüfung ≠ Vollprüfung |
 | `test_job_control.py` | Abbruch ≠ Fehler, Pause per SIGSTOP und Fortsetzen, Pause nach Datei, Datei während der Prüfung verändert, gleichzeitige Aufträge + Duplikatschutz, Zeitpläne ohne Doppelstart, Verschieben/Umbenennen/Löschen, Ausschlüsse, nicht eingehängtes Dataset, Symlink-Ausbruch, fehlende Leserechte (echt im Container und simuliert), Anmeldung, Eingabevalidierung, Reparatur standardmäßig aus |
 | `test_restart_and_scale.py` | `kill -9` mitten im Scan und Wiederaufnahme (D), geordnetes Herunterfahren, 1.000 MKV-Dateien: Bestandsaufnahme, Prüfung, Paginierung, Originale unverändert (A) |
-| `test_optimizer.py` | MKV-Optimizer: Sprach-/Codec-/Track-ID-Regeln, geschützte Sprachen, nie ohne Audiospur, Remux ins Ausgabeverzeichnis (Original unverändert), Ersetzen nur mit Freigabe (mit Sicherung bzw. Löschen), Suffix-Modus, Audiokonvertierung ersetzen/zusätzlich mit eigenem Profil, fehlgeschlagene Ergebnisprüfung lässt Original unverändert, beschädigte Dateien übersprungen, Abbruch und Pause einer laufenden Konvertierung, Aufräumen nach Neustart |
+| `test_optimizer.py` | MKV-Optimizer: Sprach-/Codec-/Track-ID-Regeln, geschützte Sprachen, nie ohne Audiospur, Remux ins Ausgabeverzeichnis (Original unverändert), Ersetzen nur mit Freigabe (mit Sicherung bzw. Löschen), Suffix-Modus, Audiokonvertierung ersetzen/zusätzlich mit eigenem Profil, fehlgeschlagene Ergebnisprüfung lässt Original unverändert, beschädigte Dateien übersprungen, Abbruch und Pause einer laufenden Konvertierung, Aufräumen nach Neustart, Spurgrößen aus Tags/Bitrate, Vorhersage der Ersparnis gegen tatsächliche Ersparnis (≤ 3 %) |
 | `test_units.py` | Cron, Statuslogik, Zeitangaben, CSV-Formelschutz, Pfadvalidierung |
 | `scripts/docker-smoke-test.sh` | fertiges Image mit `/media:ro` (G), PUID/PGID, Healthcheck |
 

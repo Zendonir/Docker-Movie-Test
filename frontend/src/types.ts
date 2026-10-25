@@ -313,6 +313,9 @@ export interface OptPlan {
   removed?: number[];
   default_track?: number | null;
   track_order?: number[] | string[] | null;
+  predicted_saved?: number | null;
+  predicted_exact?: boolean;
+  predicted_unknown?: number;
   conversions?: { track_id: number; language: string; source_codec: string | null; channels_in: number | null; channels_out: number | null; track_name: string }[];
   mode?: string;
 }
@@ -340,6 +343,8 @@ export interface OptPreview {
   unanalyzed: number;
   choices: { audio_languages: Choice[]; audio_codecs: Choice[]; subtitle_languages: Choice[]; subtitle_codecs: Choice[] };
   items: OptFile[];
+  predictions: Record<string, number | null>;
+  prediction: { saved: number; files_with_unknown: number; exact: boolean };
 }
 
 export interface OptStatus {
@@ -391,6 +396,8 @@ export interface OptJob {
   resume_count: number;
   output_mode: string;
   message: string | null;
+  predicted_saved: number | null;
+  predicted_unknown_files: number;
 }
 
 export interface OptLiveJob extends OptJob {
