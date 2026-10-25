@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 
 from . import __version__
-from .api import auth_routes, events, exports_routes, files, jobs, libraries, optimizer, schedules, settings_routes, stats, system
+from .api import auth_routes, events, exports_routes, files, jobs, libraries, movies, optimizer, schedules, settings_routes, stats, system
 from .api.deps import require_auth
 from .config import get_config
 from .database import dispose_engine, get_engine, init_engine, session_scope
@@ -133,7 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_routes.router)
     protected = [Depends(require_auth)]
     for r in (libraries.router, files.router, jobs.router, schedules.router, settings_routes.router, stats.router,
-              exports_routes.router, events.router, system.router, optimizer.router):
+              exports_routes.router, events.router, system.router, optimizer.router, movies.router):
         app.include_router(r, dependencies=protected)
 
     @app.middleware("http")

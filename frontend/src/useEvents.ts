@@ -39,6 +39,9 @@ export function useLiveEvents(enabled: boolean) {
             qc.invalidateQueries({ queryKey: ["job", id] });
             qc.invalidateQueries({ queryKey: ["live"] });
             invalidateSoon();
+          } else if (msg.event === "movies") {
+            if (!(msg.data as { running: boolean }).running) { qc.invalidateQueries({ queryKey: ["movies"] }); qc.invalidateQueries({ queryKey: ["movie-facets"] }); }
+            qc.invalidateQueries({ queryKey: ["imdb-status"] });
           } else if (msg.event === "optimizer_progress") {
             qc.setQueryData(["opt-live"], msg.data);
           } else if (msg.event === "optimizer_analysis") {

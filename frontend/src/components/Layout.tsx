@@ -1,13 +1,14 @@
 import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, FileBarChart2, FolderTree, Gauge, ListVideo, LogOut, Menu, Moon, Pause, Play, ScanLine, Settings, Sun, Wand2 } from "lucide-react";
+import { CalendarClock, Clapperboard, FileBarChart2, FolderTree, Gauge, ListVideo, LogOut, Menu, Moon, Pause, Play, ScanLine, Settings, Sun, Wand2 } from "lucide-react";
 import { api, post } from "../api";
 import type { LiveState, Stats } from "../types";
 import { useToast } from "./toast";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: Gauge, end: true },
+  { to: "/filme", label: "Filme", icon: Clapperboard },
   { to: "/dateien", label: "Dateien", icon: ListVideo },
   { to: "/scans", label: "Scans", icon: ScanLine },
   { to: "/zeitplaene", label: "Zeitpläne", icon: CalendarClock },

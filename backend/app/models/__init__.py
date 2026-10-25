@@ -445,3 +445,39 @@ class OptimizerItem(Base):
     duration_s: Mapped[float | None] = mapped_column(Float, nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     log: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Filmübersicht
+
+
+class MovieInfo(Base):
+    """IMDb-Zuordnung und -Daten je Mediendatei."""
+
+    __tablename__ = "movie_info"
+    __table_args__ = (
+        Index("ix_movie_info_rating", "rating"),
+        Index("ix_movie_info_year", "year"),
+        Index("ix_movie_info_imdb", "imdb_id"),
+    )
+
+    file_id: Mapped[int] = mapped_column(ForeignKey("media_files.id", ondelete="CASCADE"), primary_key=True)
+    parsed_title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    parsed_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    imdb_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    match_source: Mapped[str | None] = mapped_column(String(16), nullable=True)  # manual, nfo, filename, title_year
+    match_confidence: Mapped[str | None] = mapped_column(String(16), nullable=True)  # exact, high, medium, low, none, ambiguous
+    manual: Mapped[bool] = mapped_column(Boolean, default=False)
+    manual_none: Mapped[bool] = mapped_column(Boolean, default=False)  # vom Benutzer: keine Zuordnung
+    title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    original_title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    title_sort: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    runtime_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    genres: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    title_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    rating: Mapped[float | None] = mapped_column(Float, nullable=True)
+    votes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    nfo_path: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    fingerprint_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)

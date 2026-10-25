@@ -30,6 +30,7 @@ bereits vollständig geprüft wurden**.
 5. [Fehlerklassen und Zeitangaben](#5-fehlerklassen-und-zeitangaben)
 6. [Bedienung](#6-bedienung)
 7. [MKV-Optimizer](#7-mkv-optimizer)
+   · [Filmübersicht mit IMDb-Bewertungen](#filmübersicht-mit-imdb-bewertungen)
 8. [Bekannte Einschränkungen](#8-bekannte-einschränkungen)
 9. [Architektur](#9-architektur)
 10. [Tests](#10-tests)
@@ -143,6 +144,7 @@ und in der Oberfläche unter **Bibliotheken** als eigene Bibliothek hinzufügen.
 | `REPAIR_ENABLED` | `false` | Vorbereitete Reparaturfunktion freischalten (siehe 13) |
 | `SCAN_TMP_DIR` | `/config/tmp` | Temporärer Speicher für den optionalen Diagnose-Remux |
 | `OPTIMIZER_OUTPUT_DIR` | `/output` | Ausgabeverzeichnis des MKV-Optimizers (Volume einbinden) |
+| `IMDB_DATASET_URL` | `https://datasets.imdbws.com` | Quelle der IMDb-Datensätze (z. B. interner Spiegel) |
 | `PORT` | `8080` | Port im Container |
 | `LOG_LEVEL` | `INFO` | Protokollstufe |
 
@@ -418,6 +420,41 @@ Compose-Beispiel für Ersetzen am Original (bewusst ohne `:ro`):
 * Die Oberfläche ist deutsch; eine englische Übersetzung ist nicht enthalten.
 * Werkzeugsuche/-pfade entfallen, weil MKVToolNix und FFmpeg im Image enthalten sind.
 
+### Filmübersicht mit IMDb-Bewertungen
+
+![Filme](docs/screenshots/filme.png)
+
+Menüpunkt **Filme**: alle Filme als Tabelle mit Titel (deutscher Titel, darunter Originaltitel), Jahr,
+**IMDb-Bewertung** und Stimmenzahl, Laufzeit, Genres, Video (Auflösung, Codec, 10 bit), allen **Tonspuren**
+(Sprache, Codec, Kanäle – deutsche Spuren hervorgehoben), Untertitelsprachen, Größe, Integritätszustand und
+Datum der Aufnahme. **Jede Spalte ist per Klick sortierbar** (erneuter Klick kehrt die Reihenfolge um), auch nach
+Bewertung, Stimmen, Auflösung und Anzahl der Tonspuren; Filme ohne Bewertung stehen immer am Ende. Filter: Suche
+(Titel, Originaltitel, Dateiname), Genre, Mindestbewertung, Tonspur- und Untertitelsprache, Auflösung, mit/ohne
+IMDb-Zuordnung, Bibliothek. Ein Klick auf eine Zeile zeigt alle Details (Spurnamen, Bitraten, Kanallayout,
+IMDb-Link, Art der Zuordnung). Die gefilterte und sortierte Liste lässt sich als CSV exportieren.
+
+Tonspuren und Metadaten stammen aus der Schnellprüfung; noch nicht eingelesene Dateien werden angezeigt und
+lassen sich mit „Metadaten einlesen“ nachholen.
+
+**Bewertungen** kommen aus den offiziellen **IMDb-Datensätzen** (`datasets.imdbws.com`, nur für private,
+nicht-kommerzielle Nutzung): Ein Klick lädt `title.basics`, `title.ratings` und optional `title.akas`
+(deutsche Titel) herunter und importiert sie in `/config/imdb.db` – danach läuft jeder Abgleich lokal, ohne
+API-Schlüssel und ohne Anfrage je Film. Ohne Internetzugang am NAS die drei Dateien manuell nach `/config/imdb/`
+kopieren und „Lokale Dateien importieren“ wählen. Eine fehlgeschlagene Aktualisierung lässt die bisherigen
+Daten unverändert (Import in eine temporäre Datei, dann atomarer Austausch). Für aktuelle Bewertungen gelegentlich
+„jetzt aktualisieren“ wählen.
+
+Zuordnung Datei → IMDb (in dieser Reihenfolge):
+
+1. **manuell** in der Oberfläche („Zuordnung ändern“: Kandidatensuche nach Titel/Jahr oder IMDb-ID, auch
+   „Keine Zuordnung“) – bleibt bei späteren Läufen erhalten,
+2. IMDb-ID aus einer **.nfo-Datei** (`<film>.nfo` oder `movie.nfo`, Kodi/Jellyfin/Emby),
+3. IMDb-ID im **Datei- oder Ordnernamen** (`… [tt1234567].mkv`),
+4. **Titel + Jahr** aus dem Datei- bzw. Ordnernamen (Release-Angaben wie `1080p`, `German`, `BluRay` werden
+   entfernt), verglichen mit Original-, internationalem und deutschem Titel; Umlaute, Akzente und Satzzeichen
+   werden dabei vereinheitlicht. Die Sicherheit wird angezeigt (sicher / wahrscheinlich / unsicher ohne Jahr /
+   mehrdeutig – mehrdeutige Treffer werden nicht automatisch übernommen).
+
 ## 8. Bekannte Einschränkungen
 
 * **Decodierbarkeit ≠ Bildqualität.** Ein formal gültiger, aber inhaltlich falscher Frame (z. B. grüne Blöcke
@@ -445,6 +482,10 @@ Compose-Beispiel für Ersetzen am Original (bewusst ohne `:ro`):
   Audiokonvertierung geprüft; Dateien, bei denen sie nicht eindeutig ist, werden nicht bearbeitet. Ersetzen am
   Original setzt voraus, dass Sicherungsordner und Datei im selben Dataset liegen (atomares Umbenennen).
   Eine Konvertierung verlustbehafteter Formate ist naturgemäß nicht verlustfrei.
+* **IMDb:** Der Download benötigt Internetzugang des Containers zu `datasets.imdbws.com` (rund 750 MB inkl.
+  deutscher Titel; die Datenbank `/config/imdb.db` belegt danach einige hundert MB). Die automatische Zuordnung
+  hängt von aussagekräftigen Dateinamen ab; Dateien ohne Jahr oder mit sehr allgemeinem Titel bitte per .nfo oder
+  manuell zuordnen. Bewertungen ändern sich täglich und werden nur bei einer Aktualisierung übernommen.
 * Die Reparaturfunktion ist nur vorbereitet (Remux in neue Datei), standardmäßig deaktiviert und kann zerstörte
   Bild-/Tondaten nicht wiederherstellen.
 
@@ -481,6 +522,7 @@ backend/app/scanners/messages.py    Regelwerk für Werkzeugmeldungen
 backend/app/scanners/process.py     Prozesssteuerung (Argumentlisten, Prioritäten, Pause, Abbruch)
 backend/app/services/               Bestandsaufnahme, Prüfablauf, Aufträge, Status, Export, Auth, Reparatur …
 backend/app/workers/                Worker und Zeitplaner
+backend/app/movies/                 Filmübersicht (Dateinamen/.nfo-Erkennung, IMDb-Import und -Abgleich)
 backend/app/optimizer/              MKV-Optimizer (Spuranalyse, Regeln, Profile, Dateioperationen, Worker)
 frontend/src/                       Oberfläche
 tests/                              automatisierte Tests (inkl. Testmedien-Erzeugung)
@@ -502,6 +544,7 @@ scripts/docker-smoke-test.sh        Ende-zu-Ende-Test des Images mit /media:ro
 | `job_events` | Nachvollziehbares Auftragsprotokoll |
 | `scan_schedules` | Zeitpläne (Cron, Aufgabe, Methoden, nächster/letzter Lauf) |
 | `settings` | Einstellungen |
+| `movie_info` | Filmübersicht: IMDb-Zuordnung je Datei (Quelle, Sicherheit, manuell), Titel, Jahr, Genres, Bewertung, Stimmen |
 | `optimizer_analysis`, `optimizer_tracks` | MKV-Optimizer: zwischengespeicherte Spuranalyse je Dateiversion |
 | `optimizer_profiles` | Profile der Audiokonvertierung |
 | `optimizer_jobs`, `optimizer_items` | Optimizer-Aufträge mit Plan, Ziel-/Sicherungspfad, temporären Dateien und Protokoll je Datei |
@@ -542,6 +585,7 @@ Alle Testmedien werden mit FFmpeg erzeugt und gezielt beschädigt (`tests/media_
 | `test_job_control.py` | Abbruch ≠ Fehler, Pause per SIGSTOP und Fortsetzen, Pause nach Datei, Datei während der Prüfung verändert, gleichzeitige Aufträge + Duplikatschutz, Zeitpläne ohne Doppelstart, Verschieben/Umbenennen/Löschen, Ausschlüsse, nicht eingehängtes Dataset, Symlink-Ausbruch, fehlende Leserechte (echt im Container und simuliert), Anmeldung, Eingabevalidierung, Reparatur standardmäßig aus |
 | `test_restart_and_scale.py` | `kill -9` mitten im Scan und Wiederaufnahme (D), geordnetes Herunterfahren, 1.000 MKV-Dateien: Bestandsaufnahme, Prüfung, Paginierung, Originale unverändert (A) |
 | `test_optimizer.py` | MKV-Optimizer: Sprach-/Codec-/Track-ID-Regeln, geschützte Sprachen, nie ohne Audiospur, Remux ins Ausgabeverzeichnis (Original unverändert), Ersetzen nur mit Freigabe (mit Sicherung bzw. Löschen), Suffix-Modus, Audiokonvertierung ersetzen/zusätzlich mit eigenem Profil, fehlgeschlagene Ergebnisprüfung lässt Original unverändert, beschädigte Dateien übersprungen, Abbruch und Pause einer laufenden Konvertierung, Aufräumen nach Neustart, Spurgrößen aus Tags/Bitrate, Vorhersage der Ersparnis gegen tatsächliche Ersparnis (≤ 3 %) |
+| `test_movies.py` | Filmübersicht: Titel/Jahr aus Dateinamen, Import der IMDb-Datensätze (Serien/Erwachseneninhalte ausgeschlossen), Abgleich über deutschen Titel, .nfo, Ordnername und ohne Jahr, deutsche Anzeigetitel, Sortierung nach Bewertung/Jahr/Titel (ohne Bewertung am Ende), Filter (Genre, Bewertung, Tonspursprache), manuelle Zuordnung bleibt erhalten, CSV-Export, Download über HTTP, fehlgeschlagener Download lässt alte Daten nutzbar |
 | `test_units.py` | Cron, Statuslogik, Zeitangaben, CSV-Formelschutz, Pfadvalidierung |
 | `scripts/docker-smoke-test.sh` | fertiges Image mit `/media:ro` (G), PUID/PGID, Healthcheck |
 

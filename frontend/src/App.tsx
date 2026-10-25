@@ -15,6 +15,7 @@ import { Reports } from "./pages/Reports";
 import { Libraries } from "./pages/Libraries";
 import { SettingsPage } from "./pages/Settings";
 import { Login } from "./pages/Login";
+import { Movies } from "./pages/Movies";
 import { OptimizerPage } from "./pages/optimizer/Optimizer";
 
 interface AuthStatus { auth_enabled: boolean; authenticated: boolean; username: string | null }
@@ -35,6 +36,7 @@ export function App() {
     <Layout authEnabled={!!auth.data?.auth_enabled}>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/filme" element={<Movies />} />
         <Route path="/dateien" element={<Files />} />
         <Route path="/dateien/:id" element={<FileDetailPage />} />
         <Route path="/scans" element={<Scans />} />
