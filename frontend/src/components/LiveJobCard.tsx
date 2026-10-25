@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Square } from "lucide-react";
+import { Pause, Play, SkipForward, Square } from "lucide-react";
 import { post } from "../api";
 import { fmtBytes, fmtEta, fmtInt, fmtPct, fmtSpeed, JOB_STATE_LABELS, METHOD_LABELS } from "../format";
 import type { LiveJob } from "../types";
@@ -15,6 +15,14 @@ export function LiveJobCard({ job, compact }: { job: LiveJob; compact?: boolean 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["live"] });
       qc.invalidateQueries({ queryKey: ["jobs"] });
+    },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
+  const skip = useMutation({
+    mutationFn: (fileId: number) => post(`/api/jobs/${job.id}/skip?file_id=${fileId}`),
+    onSuccess: () => {
+      toast("Datei wird übersprungen", "ok");
+      qc.invalidateQueries({ queryKey: ["live"] });
     },
     onError: (e: Error) => toast(e.message, "error"),
   });
@@ -72,6 +80,11 @@ export function LiveJobCard({ job, compact }: { job: LiveJob; compact?: boolean 
                 <Link to={`/dateien/${c.file_id}`} className="truncate font-medium hover:text-sky-500" title={c.filename ?? ""}>{c.filename ?? `Datei ${c.file_id}`}</Link>
                 <span className="shrink-0 tabular-nums text-slate-500">
                   {c.paused ? "angehalten · " : ""}{c.method ? (METHOD_LABELS[c.method] ?? (c.method === "probe" ? "Analyse" : c.method)) : "Start"} · {fmtPct(c.fraction)} · {fmtBytes(c.size)}
+                  <button className="ml-2 inline-flex items-center gap-0.5 rounded px-1 text-slate-500 hover:bg-slate-200 hover:text-sky-500 dark:hover:bg-slate-700"
+                    title="Prüfung dieser Datei abbrechen und mit der nächsten weitermachen" disabled={skip.isPending}
+                    onClick={() => { if (confirm(`„${c.filename ?? c.file_id}“ überspringen?`)) skip.mutate(c.file_id); }}>
+                    <SkipForward className="h-3.5 w-3.5" />Überspringen
+                  </button>
                 </span>
               </div>
               <div className="mt-1"><ProgressBar value={c.fraction} tone="emerald" /></div>

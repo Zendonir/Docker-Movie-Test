@@ -213,6 +213,15 @@ class ScanWorker:
                     job.started_at = utcnow()
         return out
 
+    def skip(self, job_id: int, file_id: int | None = None) -> int:
+        """Bricht die laufende Prüfung der Datei(en) ab und markiert sie als übersprungen. Der Auftrag läuft weiter."""
+        n = 0
+        for r in list(self.running.values()):
+            if r.job_id == job_id and (file_id is None or r.file_id == file_id):
+                r.control.cancel("skip")
+                n += 1
+        return n
+
     def _spawn(self, item: dict, settings: AppSettings) -> None:
         control = ScanControl()
         r = RunningItem(job_id=item["job_id"], item_id=item["item_id"], file_id=item["file_id"], size=item["size"],
@@ -252,6 +261,15 @@ class ScanWorker:
             if item is None or db.get(ScanJob, r.job_id) is None:
                 return
             item.finished_at = utcnow()
+            if r.control.cancelled and r.control.cancel_reason == "skip":
+                item.state = "skipped"
+                item.message = "Manuell übersprungen"
+                inc["skipped_files"] = 1
+                inc["done_bytes"] = item.size or 0
+                jobsvc.add_event(db, r.job_id, f"Datei-ID {r.file_id} manuell übersprungen", "warning")
+                db.execute(update(ScanJob).where(ScanJob.id == r.job_id)
+                           .values(**{k: getattr(ScanJob, k) + v for k, v in inc.items()}))
+                return
             if r.control.cancelled and r.control.cancel_reason != "user":
                 # Herunterfahren: Datei bleibt ausstehend und wird nach dem Neustart wiederholt
                 item.state = "pending"

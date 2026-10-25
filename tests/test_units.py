@@ -49,3 +49,30 @@ def test_library_path_validation(app_env, tmp_path):
     for bad in ("relative/path", "/etc", str(app_env["media"] / ".." / "config"), str(app_env["media"] / "fehlt")):
         with pytest.raises(PathSecurityError):
             validate_library_path(bad)
+
+
+async def test_stall_detected_despite_output():
+    """Ein Werkzeug, das ständig Fortschrittszeilen schreibt, aber nicht vorankommt, gilt als hängend."""
+    import sys
+    import time as _t
+
+    from app.scanners.process import ResourceLimits, ScanControl, run_process
+
+    script = "import time\nwhile True:\n    print('progress=continue out_time_us=5000000', flush=True)\n    time.sleep(0.2)\n"
+    value = [5.0]
+    t0 = _t.monotonic()
+    res = await run_process([sys.executable, "-c", script], ScanControl(), ResourceLimits(io_class="none", stall_timeout=1),
+                            progress_value=lambda: value[0])
+    assert res.stalled and _t.monotonic() - t0 < 30
+
+
+async def test_advancing_progress_is_not_a_stall():
+    import sys
+
+    from app.scanners.process import ResourceLimits, ScanControl, run_process
+
+    script = "import time\nfor i in range(40):\n    print(i, flush=True)\n    time.sleep(0.25)\n"
+    pos = [0.0]
+    res = await run_process([sys.executable, "-c", script], ScanControl(), ResourceLimits(io_class="none", stall_timeout=3),
+                            on_stdout=lambda line: pos.__setitem__(0, float(line)), progress_value=lambda: pos[0])
+    assert not res.stalled and res.returncode == 0

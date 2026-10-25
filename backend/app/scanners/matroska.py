@@ -106,9 +106,23 @@ async def run_ebml_validator(path: str, control: ScanControl, limits: ResourceLi
             fatal = obj
 
     env = {"PYTHONPATH": str(BACKEND_ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")}
-    res = await run_process(cmd, control, limits, on_stdout=on_line, env=env)
+    last_pos = [None]
+    _inner = on_line
+
+    def on_line(line: str) -> None:  # noqa: F811 – merkt sich zusätzlich die Leseposition
+        if line.startswith('{"t": "progress"') or line.startswith('{"t":"progress"'):
+            try:
+                last_pos[0] = float(json.loads(line).get("pos"))
+            except (ValueError, TypeError):
+                pass
+        _inner(line)
+
+    res = await run_process(cmd, control, limits, on_stdout=on_line, env=env, progress_value=lambda: last_pos[0])
     if res.cancelled:
         return None, None, True
+    if res.stalled:
+        where = f" (bei Byte {last_pos[0]:.0f})" if last_pos[0] is not None else ""
+        return None, f"EBML-Prüfer kam {limits.stall_timeout / 60:.0f} Minuten lang nicht voran{where} und wurde beendet.", False
     if fatal:
         return None, f"{fatal.get('kind')}: {fatal.get('message')}", False
     if summary is None:
@@ -245,8 +259,16 @@ async def run_mkvmerge_pass(path: str, toolset: Toolset, control: ScanControl, l
             on_progress(parser.progress)
 
     cmd = [toolset.mkvmerge.path or "mkvmerge", "--ui-language", "en_US", "--gui-mode", "-o", os.devnull, path]
-    res = await run_process(cmd, control, limits, on_stdout=on_line, on_stderr=on_line)
+    res = await run_process(cmd, control, limits, on_stdout=on_line, on_stderr=on_line,
+                            progress_value=lambda: parser.progress)
     info = {"command": cmd, "returncode": res.returncode, "version": toolset.mkvmerge.version}
+    if res.stalled:
+        findings = parser.finish()
+        findings.append(Finding("tool_failed", Severity.INCOMPLETE,
+                                f"mkvmerge kam {limits.stall_timeout / 60:.0f} Minuten lang nicht voran"
+                                + (f" (bei {parser.progress:.0f} %)" if parser.progress is not None else "")
+                                + " und wurde beendet.", TOOL_MKVMERGE))
+        return findings, Outcome.TOOL_FAILED, info
     if res.cancelled:
         return parser.finish(), Outcome.ABORTED, info
     if res.spawn_error:

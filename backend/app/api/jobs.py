@@ -142,6 +142,17 @@ def cancel_job(job_id: int, db: Session = Depends(get_db)):
     return job_dict(j)
 
 
+@router.post("/jobs/{job_id}/skip")
+async def skip_current(job_id: int, file_id: int | None = None):
+    """Laufende Prüfung abbrechen und mit der nächsten Datei weitermachen.
+
+    Asynchron, weil der Abbruch Timer in der Ereignisschleife des Workers setzt."""
+    n = get_worker().skip(job_id, file_id)
+    if n == 0:
+        raise HTTPException(409, "Für diesen Auftrag wird gerade keine Datei geprüft.")
+    return {"skipped": n}
+
+
 @router.get("/scan/live")
 async def live():
     import asyncio

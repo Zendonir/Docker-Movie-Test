@@ -162,8 +162,14 @@ async def run_process(
     on_stdout: LineHandler | None = None,
     on_stderr: LineHandler | None = None,
     env: dict[str, str] | None = None,
+    progress_value: Callable[[], float | None] | None = None,
 ) -> ProcessResult:
-    """Startet ``cmd`` und streamt stdout/stderr zeilenweise an die Handler."""
+    """Startet ``cmd`` und streamt stdout/stderr zeilenweise an die Handler.
+
+    ``progress_value`` liefert den aktuellen Fortschritt (Position, Zeit, Prozent). Ist er angegeben, gilt ein
+    Werkzeug als hängend, wenn sich dieser Wert ``stall_timeout`` Sekunden lang nicht erhöht – auch wenn es
+    weiter Ausgaben schreibt (FFmpeg meldet mit ``-progress`` z. B. alle 0,5 s, selbst wenn es feststeckt).
+    """
     if control.cancelled:
         return ProcessResult(returncode=None, cancelled=True)
     await control.wait_running()
@@ -190,23 +196,32 @@ async def run_process(
     result = ProcessResult(returncode=None)
     activity = [time.monotonic()]
 
+    best = [None if progress_value is None else progress_value()]
+
     async def watchdog() -> None:
         while proc.returncode is None:
             await asyncio.sleep(5)
             if control.paused:
                 activity[0] = time.monotonic()
                 continue
+            if progress_value is not None:
+                cur = progress_value()
+                if cur is not None and (best[0] is None or cur > best[0]):
+                    best[0] = cur
+                    activity[0] = time.monotonic()
             if limits.stall_timeout and time.monotonic() - activity[0] > limits.stall_timeout:
                 result.stalled = True
                 control._signal(proc, signal.SIGKILL)
                 return
 
+    # Mit Fortschrittswert zählt nur echter Fortschritt, sonst jede Ausgabezeile
+    out_activity = [0.0] if progress_value is not None else activity
     wd = asyncio.create_task(watchdog())
     try:
         assert proc.stdout is not None and proc.stderr is not None
         await asyncio.gather(
-            _pump(proc.stdout, on_stdout, result.stdout_tail, activity),
-            _pump(proc.stderr, on_stderr, result.stderr_tail, activity),
+            _pump(proc.stdout, on_stdout, result.stdout_tail, out_activity),
+            _pump(proc.stderr, on_stderr, result.stderr_tail, out_activity),
         )
         result.returncode = await proc.wait()
     except asyncio.CancelledError:

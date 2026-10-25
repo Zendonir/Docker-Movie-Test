@@ -329,6 +329,15 @@ nicht als Datum („3.67“ → „Mrz 67“) oder Tausenderzahl liest.
 
 ### Pausieren, Abbrechen, Neustart
 
+**Datei überspringen:** In der Live-Ansicht eines Scans hat jede gerade geprüfte Datei den Knopf
+*Überspringen*. Die Prüfung dieser Datei wird abgebrochen (Werkzeuge werden beendet), die Datei als
+„übersprungen“ vermerkt und der Auftrag macht mit der nächsten Datei weiter (`POST /api/jobs/{id}/skip?file_id=…`).
+
+**Hängende Werkzeuge:** Kommt FFmpeg, mkvmerge oder der EBML-Prüfer 30 Minuten lang nicht voran
+(Einstellung „Hängererkennung“), wird es beendet und die Datei als „Nicht vollständig geprüft“ mit der
+Position des Hängers vermerkt. Maßgeblich ist der tatsächliche Fortschritt (Zeit bzw. Leseposition), nicht
+bloße Ausgabe – FFmpeg meldet auch im Stillstand alle 0,5 s einen Fortschrittsblock.
+
 * *Sofort pausieren* hält FFmpeg/mkvmerge/den Strukturprüfer per `SIGSTOP` an; nach `SIGCONT` geht es exakt an
   derselben Stelle weiter. Alternativ: *nach der aktuellen Datei* pausieren.
 * *Abbrechen* beendet die Werkzeuge; die Datei erhält das Ergebnis „abgebrochen“ (nicht vollständig geprüft),

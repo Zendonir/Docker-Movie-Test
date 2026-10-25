@@ -62,6 +62,20 @@ def test_cancel_is_not_a_scan_error(client, app_env, base_media):
     assert not ffmpeg_children_states()  # kein verwaister FFmpeg-Prozess
 
 
+def test_manual_skip_continues_with_next_file(client, app_env, base_media):
+    mf.copy(base_media["long"], app_env["media"] / "a_lang.mkv")
+    mf.copy(base_media["long"], app_env["media"] / "b_lang.mkv")
+    slow_settings(client)
+    job = client.post("/api/jobs", json={"task": "incremental", "methods": ["full"]}).json()
+    item = wait_running_item(client, job["id"], min_fraction=0.02)
+    first = item["current"][0]["file_id"]
+    r = client.post(f"/api/jobs/{job['id']}/skip", params={"file_id": first})
+    assert r.status_code == 200 and r.json()["skipped"] == 1
+    j = wait_job(client, job["id"], timeout=120)
+    assert j["state"] == "completed" and j["skipped_files"] >= 1 and j["done_files"] >= 1, j
+    assert not ffmpeg_children_states()
+
+
 def test_pause_and_resume_immediately(client, app_env, base_media):
     mf.copy(base_media["long"], app_env["media"] / "lang.mkv")
     slow_settings(client, pause_mode="immediate")

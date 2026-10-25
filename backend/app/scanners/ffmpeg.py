@@ -345,7 +345,8 @@ async def run_ffmpeg_check(
             on_progress(min(analyzer.out_time / duration, 1.0))
 
     try:
-        res = await run_process(cmd, control, limits, on_stdout=progress, on_stderr=analyzer.on_stderr_line)
+        res = await run_process(cmd, control, limits, on_stdout=progress, on_stderr=analyzer.on_stderr_line,
+                                progress_value=lambda: analyzer.out_time)
     finally:
         analyzer.close()
     findings = analyzer.finish()
@@ -367,7 +368,11 @@ async def run_ffmpeg_check(
     if res.stalled:
         result.outcome = Outcome.TOOL_FAILED
         findings.append(Finding("tool_failed", Severity.INCOMPLETE,
-                                "FFmpeg hat zu lange keine Ausgabe geliefert und wurde beendet.", tool))
+                                f"FFmpeg kam {limits.stall_timeout / 60:.0f} Minuten lang nicht voran"
+                                + (f" (hängt bei {analyzer.out_time:.0f} s)" if analyzer.out_time is not None else "")
+                                + " und wurde beendet. Die Datei ist an dieser Stelle vermutlich stark beschädigt.",
+                                tool, time_start=analyzer.out_time, time_precision="approx",
+                                time_source="Letzter Fortschritt von FFmpeg"))
         result.findings = findings
         return result
 
