@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Download, RefreshCw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, RefreshCw, Search, Wrench, X } from "lucide-react";
+import { RepairDialog } from "../components/RepairDialog";
 import { api, ApiError, post, qs } from "../api";
 import { fmtBytes, fmtDate, fmtDuration, fmtInt } from "../format";
 import type { FileStatus, Library, MediaFileSummary, Method, Paged } from "../types";
@@ -88,6 +89,7 @@ export function Files() {
   const [search, setSearch] = useState(sp.get("q") ?? "");
   const debounced = useDebounced(search);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [repairIds, setRepairIds] = useState<number[] | null>(null);
   const [recheck, setRecheck] = useState<number[] | null>(null);
   const toast = useToast();
 
@@ -222,6 +224,7 @@ export function Files() {
         <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-sm backdrop-blur">
           <span className="font-medium">{fmtInt(selected.size)} ausgewählt</span>
           <button className="btn-primary" onClick={() => setRecheck([...selected])}><RefreshCw className="h-4 w-4" />Erneut prüfen</button>
+          <button className="btn-secondary" onClick={() => setRepairIds([...selected])}><Wrench className="h-4 w-4" />Reparieren …</button>
           <button className="btn-ghost" onClick={selectAllMatches}>Alle {fmtInt(files.data?.total)} Treffer auswählen</button>
           <button className="btn-ghost" onClick={() => setSelected(new Set())}>Auswahl aufheben</button>
         </div>
@@ -283,6 +286,7 @@ export function Files() {
         </div>
       </div>
       {recheck && <RecheckModal open onClose={() => setRecheck(null)} fileIds={recheck} onDone={() => setSelected(new Set())} />}
+      {repairIds && <RepairDialog title={`${fmtInt(repairIds.length)} Datei(en) reparieren`} fileIds={repairIds} onClose={() => setRepairIds(null)} />}
     </div>
   );
 }

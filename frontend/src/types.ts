@@ -388,7 +388,7 @@ export interface OptProfile {
 
 export interface OptJob {
   id: number;
-  kind: "remux" | "audio";
+  kind: "remux" | "audio" | "repair";
   name: string;
   state: string;
   pause_requested: boolean;

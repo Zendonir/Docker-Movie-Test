@@ -163,3 +163,20 @@ def assess(status: str | None, findings: list[dict]) -> dict:
             reasons.append(f"{label} (×{n})" if n > 1 else label)
     return {"category": cat, "label": CATEGORIES[cat]["label"], "action": CATEGORIES[cat]["action"],
             "reasons": reasons[:6], "reason_text": "; ".join(reasons[:6])}
+
+
+def assess_file(db, mf) -> dict:
+    """Bewertung einer Datei anhand ihrer aktuellen Prüfergebnisse (Datenbank)."""
+    from sqlalchemy import select
+
+    from ..models import DetectedError
+    from .status import current_results
+
+    current = current_results(db, mf)
+    findings: list[dict] = []
+    if current:
+        for e in db.scalars(select(DetectedError).where(DetectedError.result_id.in_([r.id for r in current.values()]))):
+            findings.append({"error_type": e.error_type, "severity": e.severity, "description": e.description,
+                             "raw_message": e.raw_message, "tool": e.tool, "stream_type": e.stream_type,
+                             "occurrences": e.occurrences, "heuristic": e.heuristic})
+    return assess(mf.status, findings)

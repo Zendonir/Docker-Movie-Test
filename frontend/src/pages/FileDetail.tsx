@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Download, FileText, RefreshCw, Wrench } from "lucide-react";
-import { api, post } from "../api";
+import { api } from "../api";
 import { fmtBytes, fmtDate, fmtDuration, fmtInt, fmtPosition, METHOD_LABELS, PRECISION_LABELS } from "../format";
 import type { DetectedError, FileDetail, Method, ScanResult } from "../types";
-import { Card, Empty, ErrorBox, Loading, Modal, SeverityBadge, StatusBadge } from "../components/ui";
+import { Card, Empty, ErrorBox, Loading, SeverityBadge, StatusBadge } from "../components/ui";
 import { Timeline } from "../components/Timeline";
 import { RecheckModal } from "./Files";
-import { useToast } from "../components/toast";
+import { RepairDialog } from "../components/RepairDialog";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -71,27 +71,6 @@ function ErrorDetail({ e, fileId }: { e: DetectedError; fileId: number }) {
   );
 }
 
-function RepairDialog({ file, onClose }: { file: FileDetail; onClose: () => void }) {
-  const [name, setName] = useState("");
-  const toast = useToast();
-  const m = useMutation({
-    mutationFn: () => post<{ target: string }>(`/api/files/${file.id}/repair`, { action: "remux", confirm: true, confirm_filename: name }),
-    onSuccess: (r) => { toast(`Reparatur gestartet – Ziel: ${r.target}`, "ok"); onClose(); },
-    onError: (e: Error) => toast(e.message, "error"),
-  });
-  return (
-    <Modal open title="Reparaturversuch (Remux in neue Datei)" onClose={onClose}
-      footer={<><button className="btn-secondary" onClick={onClose}>Abbrechen</button><button className="btn-danger" disabled={name !== file.filename || m.isPending} onClick={() => m.mutate()}>Reparatur starten</button></>}>
-      <div className="space-y-3 text-sm">
-        <p>Die Originaldatei wird <b>nicht</b> verändert. mkvmerge schreibt eine neue Datei nach <code>/config/repaired</code>. Ein Remux kann zerstörte Bild- oder Tondaten nicht wiederherstellen.</p>
-        <p>Zur Bestätigung den Dateinamen exakt eingeben:</p>
-        <code className="block rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">{file.filename}</code>
-        <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-    </Modal>
-  );
-}
-
 export function FileDetailPage() {
   const { id } = useParams();
   const fileId = Number(id);
@@ -128,7 +107,8 @@ export function FileDetailPage() {
           <a className="btn-secondary" href={exp("html")} target="_blank" rel="noreferrer"><Download className="h-4 w-4" />HTML</a>
           <a className="btn-secondary" href={exp("csv")}><Download className="h-4 w-4" />CSV</a>
           <a className="btn-secondary" href={exp("json")}><Download className="h-4 w-4" />JSON</a>
-          {f.repair_enabled && <button className="btn-secondary" onClick={() => setRepair(true)}><Wrench className="h-4 w-4" />Reparieren …</button>}
+          {f.present && f.extension === "mkv" && ["repair", "replace", "optional"].includes(f.assessment?.category) &&
+            <button className="btn-secondary" onClick={() => setRepair(true)}><Wrench className="h-4 w-4" />Reparieren …</button>}
         </div>
       </div>
 
@@ -238,7 +218,9 @@ export function FileDetailPage() {
         </div>
       </Card>
       {recheck && <RecheckModal open onClose={() => setRecheck(false)} fileIds={[f.id]} onDone={() => qc.invalidateQueries({ queryKey: ["live"] })} />}
-      {repair && <RepairDialog file={f} onClose={() => setRepair(false)} />}
+      {repair && <RepairDialog title={`Reparieren: ${f.filename}`} fileIds={[f.id]}
+        salvageDefault={f.assessment.category === "replace"} showSalvage={f.assessment.category === "replace"}
+        onClose={() => setRepair(false)} />}
     </div>
   );
 }

@@ -24,6 +24,7 @@ from ..scanners.matroska import ContainerOptions, run_ebml_validator
 from ..scanners.process import ResourceLimits, ScanControl, run_process
 from ..scanners.tools import get_toolset
 from ..services.library import mark_changed
+from ..services.repairability import assess_file
 from ..services.pathsec import PathSecurityError, resolve_media_file
 from . import fileops
 from .profiles import compute_audio_plan, expected_after_conversion, ffmpeg_encode_cmd, mkvmerge_merge_args
@@ -61,6 +62,7 @@ class Ctx:
         self.control = control
         self.progress = progress
         self.lines: list[str] = []
+        self.resyncs = 0
         self.temps: list[str] = []
         self.limits = ResourceLimits(nice=10, io_class="best-effort-low", stall_timeout=1800)
 
@@ -84,6 +86,8 @@ async def _run(ctx: Ctx, cmd: list[str], phase: str, lo: float, hi: float, durat
     state = {"t": None}
 
     def on_line(line: str) -> None:
+        if "Resyncing successful" in line:
+            ctx.resyncs += 1
         if line.startswith("#GUI#progress"):
             try:
                 ctx.progress(lo + (hi - lo) * float(line.split()[-1].rstrip("%")) / 100, phase)
@@ -169,7 +173,17 @@ async def process_item(item_id: int, kind: str, params: dict, control: ScanContr
     started = time.monotonic()
     try:
         item, mf, lib = _load(item_id)
-        if ops.skip_damaged and mf.status in ("critical", "error"):
+        if kind == "repair":
+            with session_scope() as db:
+                m2 = db.get(MediaFile, mf.id)
+                rating = assess_file(db, m2) if m2 is not None else None
+            if rating is not None:
+                if rating["category"] == "ok" and not params.get("repair", {}).get("force"):
+                    raise Skip("Kein Reparaturbedarf laut letzter Prüfung")
+                if rating["category"] == "replace" and not params.get("repair", {}).get("salvage"):
+                    raise Skip("Nicht mehr reparierbar (Datenverlust) – nur mit „Notreparatur“ zu bergen")
+                result.plan = {"assessment": rating["category"], "reasons": rating["reasons"]}
+        elif ops.skip_damaged and mf.status in ("critical", "error"):
             raise Skip("Datei hat Integritätsfehler (Status „" + mf.status + "“) – wird nicht bearbeitet")
         try:
             source = resolve_media_file(lib.path, mf.path)
@@ -192,7 +206,9 @@ async def process_item(item_id: int, kind: str, params: dict, control: ScanContr
         if not analysis.ok:
             raise Fail(f"Datei nicht analysierbar: {analysis.error}")
 
-        if kind == "remux":
+        if kind == "repair":
+            await _repair(ctx, result, mf, lib, source, st, analysis, params, ops)
+        elif kind == "remux":
             await _remux(ctx, result, mf, lib, source, st, analysis, params, ops)
         else:
             await _audio(ctx, result, mf, lib, source, st, analysis, params, ops)
@@ -203,8 +219,8 @@ async def process_item(item_id: int, kind: str, params: dict, control: ScanContr
                 if m2 is not None:
                     nst = os.stat(source)
                     mark_changed(db, m2, nst.st_size, nst.st_mtime_ns, nst.st_ino)
-                    m2.status_note = (f"Durch den MKV-Optimizer verändert ({'Spuren entfernt' if kind == 'remux' else 'Audio konvertiert'})"
-                                      " – erneute Prüfung empfohlen")
+                    what = {"remux": "Spuren entfernt", "audio": "Audio konvertiert", "repair": "repariert"}[kind]
+                    m2.status_note = f"Durch den MKV-Optimizer verändert ({what}) – erneute Prüfung empfohlen"
     except Skip as exc:
         result.state = "skipped"
         result.message = str(exc)
@@ -253,6 +269,54 @@ async def _remux(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, sour
     result.output_size = os.path.getsize(info["final"])
     saved = st.st_size - result.output_size
     result.message = f"{len(plan.removed)} Spur(en) entfernt, {saved / 1e6:.1f} MB eingespart"
+
+
+async def _repair(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, source: str, st: os.stat_result,
+                  analysis: Analysis, params: dict, ops: FileOps) -> None:
+    """Remux aller Spuren mit mkvmerge: baut Index (Cues), Zeitstempel, Laufzeitangabe und Clusterstruktur neu auf.
+
+    Zerstörte Bereiche überspringt mkvmerge per Resynchronisation – fehlende Daten kommen dadurch nicht zurück,
+    die Datei ist danach aber wieder strukturell sauber und spulbar."""
+    target = fileops.plan_target(source, lib.path, mf.rel_path, ops)
+    fileops.prepare_dir(target, int(st.st_size * 1.05) + 64 * 1024 * 1024)
+    temp = fileops.temp_path(target, ctx.item_id)
+    ctx.register_temp(temp)
+    toolset = get_toolset()
+    meta = ["--no-global-tags", "--no-track-tags"] if ops.remove_metadata else []
+    cmd = [toolset.mkvmerge.path or "mkvmerge", "--ui-language", "en_US", "--gui-mode", "-o", temp, *meta, source]
+    rc = await _run(ctx, cmd, "Reparatur (Remux)", 0.03, 0.85, None)
+    resyncs = ctx.resyncs
+    if rc not in (0, 1):
+        raise Fail(f"mkvmerge ist mit Exit-Code {rc} fehlgeschlagen")
+    ctx.progress(0.88, "Prüfung")
+    out = await identify(temp, ctx.control, ctx.limits)
+    if not out.ok:
+        raise Fail(f"Ergebnis nicht lesbar: {out.error}")
+    got = [(t.type, t.codec_family, t.language) for t in out.tracks]
+    exp = [(t.type, t.codec_family, t.language) for t in analysis.tracks]
+    if got != exp:
+        raise Fail(f"Spuren der reparierten Datei stimmen nicht mit dem Original überein (erwartet {exp}, erhalten {got})")
+    summary, err, cancelled = await run_ebml_validator(temp, ctx.control, ctx.limits, ContainerOptions(), None)
+    if cancelled:
+        raise Fail("abgebrochen")
+    if err:
+        raise Fail(f"Strukturprüfung der reparierten Datei fehlgeschlagen: {err}")
+    bad = [f for f in summary.get("findings", []) if f["severity"] in ("error", "critical")]
+    if bad:
+        raise Fail("Auch die reparierte Datei hat Strukturfehler: " + "; ".join(f["description"] for f in bad[:3]))
+    ctx.log(f"Strukturprüfung der reparierten Datei: ohne Fehler ({summary.get('clusters')} Cluster)")
+    info = fileops.finalize(target, temp, source, st)
+    ctx.temps.remove(temp)
+    result.state = "done"
+    result.output_path = info["final"]
+    result.backup_path = info.get("backup")
+    result.output_size = os.path.getsize(info["final"])
+    parts = ["Index und Zeitstempel neu aufgebaut, Struktur geprüft"]
+    if analysis.duration and out.duration and abs(analysis.duration - out.duration) > 1:
+        parts.append(f"Laufzeit {analysis.duration / 60:.1f} → {out.duration / 60:.1f} min")
+    if resyncs:
+        parts.append(f"{resyncs} zerstörte(r) Bereich(e) übersprungen – dort fehlen weiterhin Bild/Ton")
+    result.message = "; ".join(parts)
 
 
 async def _audio(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, source: str, st: os.stat_result,

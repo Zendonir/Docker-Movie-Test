@@ -294,6 +294,19 @@ Unter **Berichte** gibt es dafür drei Listen: *Nicht mehr reparierbar*, *Sollte
 die *Reparaturübersicht* (alle Dateien nach Empfehlung gruppiert, als HTML mit Summen je Gruppe).
 API: `/api/export?scope=replace|repair|assessment&format=csv|json|html`.
 
+**Direkt reparieren:** *Reparieren …* auf der Detailseite, in der Dateiliste für ausgewählte Dateien oder unter
+*Berichte → Direkt reparieren* für ganze Listen. Die Reparatur läuft als Auftrag im MKV-Optimizer
+(*Aufträge*, mit Pause/Abbruch/Fortsetzen nach Neustart):
+
+1. mkvmerge verpackt die Datei mit **allen Spuren** neu – Index (Cues), Zeitstempel, Laufzeitangabe und
+   Clusterstruktur werden neu aufgebaut, Restdaten nach dem Segmentende entfallen.
+2. Die neue Datei wird geprüft (gleiche Spuren, EBML-Strukturprüfung ohne Fehler); erst dann wird sie übernommen.
+3. Ziel gemäß *MKV-Optimizer → Einstellungen → Ausgabe* (Standard: neue Datei unter `/output`, Original bleibt).
+
+Dateien „Nicht mehr reparierbar“ werden nur mit **Notreparatur** bearbeitet: mkvmerge überspringt die zerstörten
+Bereiche, die Datei ist danach wieder abspielbar und spulbar, dort fehlen aber weiterhin Bild und Ton. Dateien ohne
+Reparaturbedarf werden übersprungen. Für `/output` muss ein beschreibbares Volume eingebunden sein.
+
 CSV mit Semikolon schreibt Zahlen mit Dezimalkomma und drei Nachkommastellen, damit Excel (deutsch) sie
 nicht als Datum („3.67“ → „Mrz 67“) oder Tausenderzahl liest.
 
@@ -521,8 +534,9 @@ Zuordnung Datei → IMDb (in dieser Reihenfolge):
   deutscher Titel; die Datenbank `/config/imdb.db` belegt danach einige hundert MB). Die automatische Zuordnung
   hängt von aussagekräftigen Dateinamen ab; Dateien ohne Jahr oder mit sehr allgemeinem Titel bitte per .nfo oder
   manuell zuordnen. Bewertungen ändern sich täglich und werden nur bei einer Aktualisierung übernommen.
-* Die Reparaturfunktion ist nur vorbereitet (Remux in neue Datei), standardmäßig deaktiviert und kann zerstörte
-  Bild-/Tondaten nicht wiederherstellen.
+* Die Reparatur (Remux mit mkvmerge) behebt Struktur-, Index- und Zeitstempelfehler, kann zerstörte
+  Bild-/Tondaten aber nicht wiederherstellen; eine Notreparatur macht solche Dateien nur wieder abspielbar.
+  Nur MKV-Dateien.
 
 ## 9. Architektur
 
@@ -698,6 +712,7 @@ Es werden keine Cloud-Dienste oder externen APIs benötigt; alles läuft lokal.
 * Optionale Anmeldung (scrypt, signierte HttpOnly-/SameSite-Cookies). Für Zugriff aus dem Internet zusätzlich
   einen Reverse-Proxy mit TLS verwenden.
 * Der Prozess läuft nicht als root (PUID/PGID per `setpriv`, keine Capabilities, `no-new-privileges`).
-* **Reparatur** (vorbereitet): nur mit `REPAIR_ENABLED=true`, nur nach Eingabe des exakten Dateinamens, schreibt
-  ausschließlich eine **neue** Datei nach `/config/repaired` (nie in eine Bibliothek, nie über eine bestehende
-  Datei).
+* **Reparatur**: nur nach ausdrücklicher Bestätigung; läuft als Optimizer-Auftrag und folgt dessen Ausgabemodus
+  (Standard: **neue** Datei unter `/output`, Original unverändert). Ersetzen von Originalen nur, wenn unter
+  *MKV-Optimizer → Einstellungen* ausdrücklich erlaubt. Die neue Datei wird vor der Übernahme auf Spuren und
+  Struktur geprüft. (Die ältere Einzeldatei-Funktion `REPAIR_ENABLED` nach `/config/repaired` bleibt als API erhalten.)

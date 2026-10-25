@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..services.repairability import assess_file
 from ..database import get_db
 from ..models import Library, MediaFile, OptimizerItem, OptimizerJob, OptimizerProfile
 from ..optimizer import fileops, service
@@ -227,9 +228,16 @@ def command_preview(body: CommandIn, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------- Aufträge
+class RepairOpts(BaseModel):
+    salvage: bool = False  # auch nicht reparierbare Dateien bergen (Lücken bleiben)
+    force: bool = False  # auch Dateien ohne Reparaturbedarf neu verpacken
+
+
 class JobIn(BaseModel):
-    kind: Literal["remux", "audio"]
-    file_ids: list[int] = Field(min_length=1, max_length=100000)
+    kind: Literal["remux", "audio", "repair"]
+    file_ids: list[int] = Field(default_factory=list, max_length=100000)
+    category: Literal["repair", "replace", "repair_and_replace"] | None = None  # Auswahl über die Reparaturliste
+    repair: RepairOpts | None = None
     rules: Rules | None = None
     profile_id: int | None = None
     name: str | None = Field(None, max_length=300)
@@ -261,7 +269,21 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
     if not tools.mkvmerge.available:
         raise HTTPException(400, "MKVToolNix (mkvmerge) ist nicht installiert")
     params: dict = {"ops": ops.to_dict()}
-    if body.kind == "remux":
+    if body.kind == "repair":
+        opts = body.repair or RepairOpts()
+        if body.category == "replace" or body.category == "repair_and_replace":
+            opts.salvage = True
+        params["repair"] = opts.model_dump()
+        name = body.name or ("Notreparatur" if opts.salvage else "Reparatur")
+        if body.category:
+            wanted = {"repair": {"repair"}, "replace": {"replace"},
+                      "repair_and_replace": {"repair", "replace"}}[body.category]
+            cand = db.scalars(select(MediaFile).where(MediaFile.present.is_(True), MediaFile.extension == "mkv",
+                                                      MediaFile.status.in_(("critical", "error", "warning"))))
+            body.file_ids = [f.id for f in cand if assess_file(db, f)["category"] in wanted]
+            if not body.file_ids:
+                raise HTTPException(400, "Keine Dateien in dieser Reparaturliste")
+    elif body.kind == "remux":
         rules = body.rules or Rules()
         params["rules"] = rules.model_dump()
         update_settings(db, {"optimizer_last_rules": rules.model_dump()})
@@ -274,6 +296,8 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
             raise HTTPException(400, f"FFmpeg hat keinen Encoder für {p.codec}")
         params["profile"] = _profile_params(p)
         name = body.name or f"Audiokonvertierung: {p.name}"
+    if not body.file_ids:
+        raise HTTPException(400, "Keine Dateien ausgewählt")
     ids = sorted(set(body.file_ids))
     files = list(db.scalars(select(MediaFile).where(MediaFile.id.in_(ids), MediaFile.present.is_(True),
                                                    MediaFile.extension == "mkv").order_by(MediaFile.rel_path)))
@@ -286,9 +310,9 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
         raise HTTPException(409, f"{len(conflict)} Datei(en) sind bereits in einem aktiven Optimizer-Auftrag, "
                                  f"z. B. {conflict[0]}")
     # Vorhersage aus den zwischengespeicherten Analysen (wird bei der Ausführung neu berechnet)
-    analyses = service.load_analyses(db, files)
+    analyses = service.load_analyses(db, files) if body.kind != "repair" else {}
     pred_total, pred_unknown = 0, 0
-    for f in files:
+    for f in files if body.kind != "repair" else []:
         a = analyses.get(f.id)
         if a is None:
             pred_unknown += 1

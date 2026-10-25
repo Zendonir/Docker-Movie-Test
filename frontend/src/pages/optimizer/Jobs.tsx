@@ -142,7 +142,7 @@ export function JobsTab() {
               {jobs.data?.items.map((j) => (
                 <tr key={j.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40" onClick={() => setOpen(open === j.id ? null : j.id)}>
                   <td className="td tabular-nums">{j.id}</td>
-                  <td className="td font-medium">{j.name}<div className="text-[11px] text-slate-500">{j.kind === "remux" ? "Spuren entfernen" : "Audiokonvertierung"}{j.resume_count ? ` · ${j.resume_count}× fortgesetzt` : ""}</div></td>
+                  <td className="td font-medium">{j.name}<div className="text-[11px] text-slate-500">{j.kind === "remux" ? "Spuren entfernen" : j.kind === "repair" ? "Reparatur" : "Audiokonvertierung"}{j.resume_count ? ` · ${j.resume_count}× fortgesetzt` : ""}</div></td>
                   <td className="td"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATE_CLS[j.state] ?? ""}`}>{JOB_STATE_LABELS[j.state] ?? j.state}</span></td>
                   <td className="td text-xs tabular-nums">{fmtInt(j.done_files)} erledigt · {fmtInt(j.skipped_files)} übersprungen{j.failed_files ? <span className="text-red-500"> · {j.failed_files} fehlgeschl.</span> : null}</td>
                   <td className="td text-xs tabular-nums">{j.saved_bytes ? fmtBytes(j.saved_bytes) : "–"}{j.predicted_saved != null && <div className="text-slate-500">Vorhersage <Saving bytes={j.predicted_saved} compact />{j.predicted_unknown_files ? ` (+${j.predicted_unknown_files} unbek.)` : ""}</div>}</td>

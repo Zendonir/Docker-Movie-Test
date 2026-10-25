@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, ExternalLink } from "lucide-react";
+import { Download, ExternalLink, Wrench } from "lucide-react";
+import { RepairDialog } from "../components/RepairDialog";
 import { api, qs } from "../api";
 import type { Job, Library, Paged } from "../types";
 import { Card } from "../components/ui";
@@ -21,6 +22,7 @@ export function Reports() {
   const [libId, setLibId] = useState<number | "">("");
   const [details, setDetails] = useState<"auto" | "yes" | "no">("auto");
   const [delim, setDelim] = useState(";");
+  const [repair, setRepair] = useState<null | "repair" | "replace">(null);
   const jobs = useQuery({ queryKey: ["jobs", "all-for-report"], queryFn: () => api<Paged<Job>>("/api/jobs?page_size=200") });
   const libs = useQuery({ queryKey: ["libraries"], queryFn: () => api<Library[]>("/api/libraries") });
   const url = (format: string, inline = false) => `/api/export${qs({
@@ -81,6 +83,18 @@ export function Reports() {
           </div>
         </div>
       </Card>
+      <Card title="Direkt reparieren">
+        <div className="space-y-3 text-sm">
+          <p>Legt einen Reparaturauftrag für alle MKV-Dateien der jeweiligen Liste an (Remux mit mkvmerge, Prüfung der
+            neuen Datei vor der Übernahme). Fortschritt und Ergebnis unter <b>MKV-Optimizer → Aufträge</b>.</p>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-primary" onClick={() => setRepair("repair")}><Wrench className="h-4 w-4" />Alle „Sollten repariert werden“ reparieren</button>
+            <button className="btn-secondary" onClick={() => setRepair("replace")}><Wrench className="h-4 w-4" />Notreparatur für „Nicht mehr reparierbar“</button>
+          </div>
+        </div>
+      </Card>
+      {repair && <RepairDialog title={repair === "repair" ? "Reparaturliste reparieren" : "Notreparatur nicht reparierbarer Dateien"}
+        category={repair} salvageDefault={repair === "replace"} showSalvage={false} onClose={() => setRepair(null)} />}
     </div>
   );
 }

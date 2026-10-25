@@ -438,3 +438,36 @@ def test_audio_prediction(oclient, opt_env, multi_src):
     assert pv["items"][0]["plan"]["predicted_saved"] > 0  # DTS 1411 kbit/s -> AC3 640 kbit/s
     pv = oclient.post("/api/optimizer/preview", json={"library_id": 1, "kind": "audio", "profile_id": add["id"]}).json()
     assert pv["items"][0]["plan"]["predicted_saved"] < 0  # zusätzliche Spur: Datei wird größer
+
+
+def test_repair_jobs(oclient, opt_env, base_media):
+    media = opt_env["media"]
+    mf.copy(base_media["ok"], media / "gut.mkv")
+    mf.copy(base_media["ok"], media / "restdaten.mkv")
+    with open(media / "restdaten.mkv", "ab") as fh:
+        fh.write(b"\x00" * 4096)  # Daten nach Segmentende – per Remux behebbar
+    mf.copy(base_media["cluster_header"], media / "kaputt.mkv")
+    orig = sha(media / "kaputt.mkv")
+    from conftest import wait_job
+    wait_job(oclient, oclient.post("/api/jobs", json={"task": "incremental", "methods": ["container"]}).json()["id"])
+    files = files_by_name(oclient)
+    assess = {n: oclient.get(f"/api/files/{files[n]['id']}").json()["assessment"]["category"]
+              for n in ("gut.mkv", "restdaten.mkv", "kaputt.mkv")}
+    assert assess == {"gut.mkv": "ok", "restdaten.mkv": "repair", "kaputt.mkv": "replace"}, assess
+
+    # Liste „Sollten repariert werden“
+    j = wait_opt_job(oclient, oclient.post("/api/optimizer/jobs", json={"kind": "repair", "category": "repair"}).json()["id"])
+    assert j["done_files"] == 1 and j["state"] == "completed", j
+    out = list(opt_env["output"].rglob("restdaten.mkv"))
+    assert out and out[0].stat().st_size < (media / "restdaten.mkv").stat().st_size
+
+    # Ohne Notreparatur werden verlorene Dateien und Dateien ohne Bedarf übersprungen
+    ids = [files["gut.mkv"]["id"], files["kaputt.mkv"]["id"]]
+    j = wait_opt_job(oclient, oclient.post("/api/optimizer/jobs", json={"kind": "repair", "file_ids": ids}).json()["id"])
+    assert j["skipped_files"] == 2, j
+    # Notreparatur birgt die beschädigte Datei in eine neue, strukturell saubere Datei
+    j = wait_opt_job(oclient, oclient.post("/api/optimizer/jobs", json={
+        "kind": "repair", "file_ids": [files["kaputt.mkv"]["id"]], "repair": {"salvage": True}}).json()["id"])
+    assert j["done_files"] == 1, j
+    assert list(opt_env["output"].rglob("kaputt.mkv"))
+    assert sha(media / "kaputt.mkv") == orig  # Original unverändert
