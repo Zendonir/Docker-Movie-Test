@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Wrench } from "lucide-react";
 import { post } from "../api";
 import { useOptStatus } from "../pages/optimizer/common";
+import type { TrackRule } from "../types";
 import { Modal } from "./ui";
 import { useToast } from "./toast";
 
@@ -19,6 +20,7 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
   const status = useOptStatus();
   const [salvage, setSalvage] = useState(salvageDefault);
   const [ok, setOk] = useState(false);
+  const [strip, setStrip] = useState(false);
   const toast = useToast();
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -27,7 +29,7 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
   const replaces = mode === "replace_backup" || mode === "replace_delete";
   const m = useMutation({
     mutationFn: () => post<{ id: number; total_files: number }>("/api/optimizer/jobs", {
-      kind: "repair", file_ids: fileIds ?? [], category, repair: { salvage },
+      kind: "repair", file_ids: fileIds ?? [], category, repair: { salvage, strip_tracks: strip },
     }),
     onSuccess: (j) => {
       toast(`Reparaturauftrag mit ${j.total_files} Datei(en) angelegt`, "ok");
@@ -63,6 +65,18 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
               die Datei ist danach wieder abspielbar und spulbar – an diesen Stellen fehlen aber weiterhin Bild und Ton.</span>
           </label>
         )}
+        <label className="flex items-start gap-2">
+          <input type="checkbox" className="mt-1" checked={strip} onChange={(e) => setStrip(e.target.checked)} />
+          <span><b>Gleichzeitig überflüssige Spuren entfernen</b> – im selben Durchgang, nach den zuletzt im
+            MKV-Optimizer verwendeten Regeln. Geschützte Sprachen bleiben immer erhalten, die letzte Audiospur wird nie entfernt.
+            {strip && status.data && (
+              <span className="mt-1 block text-xs">
+                Behalten – Audio: {ruleText(status.data.last_rules.audio)} · Untertitel: {ruleText(status.data.last_rules.subtitles)}
+                {" "}(<Link className="underline" to="/optimizer" onClick={onClose}>Regeln ändern</Link>)
+              </span>
+            )}
+          </span>
+        </label>
         <p className="text-xs text-slate-500">Dateien ohne Reparaturbedarf werden übersprungen. Nur MKV-Dateien.</p>
         <label className="flex items-start gap-2">
           <input type="checkbox" className="mt-1" checked={ok} onChange={(e) => setOk(e.target.checked)} />
@@ -71,4 +85,10 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
       </div>
     </Modal>
   );
+}
+
+function ruleText(r: TrackRule): string {
+  if (r.mode === "track_id") return r.track_ids.length ? `Spur-IDs ${r.track_ids.join(", ")}` : "keine";
+  if (!r.languages.length) return "nur geschützte Sprachen";
+  return r.languages.join(", ") + (r.codecs.length ? ` (bei mehreren Spuren je Sprache: ${r.codecs.join(", ")})` : "");
 }

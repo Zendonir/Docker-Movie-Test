@@ -140,6 +140,8 @@ def preview(body: PreviewIn, db: Session = Depends(get_db)):
             raise HTTPException(400, "Bitte ein Profil wählen")
         profile = _profile_params(p)
     rules = body.rules or Rules()
+    if body.kind == "remux" and body.rules is not None and s.optimizer_last_rules != rules.model_dump():
+        update_settings(db, {"optimizer_last_rules": rules.model_dump()})  # auch für „Reparieren + Spuren entfernen“
     files = service.mkv_files(db, body.library_id, body.directory, body.recursive)
     if body.q:
         ql = body.q.lower()
@@ -231,6 +233,7 @@ def command_preview(body: CommandIn, db: Session = Depends(get_db)):
 class RepairOpts(BaseModel):
     salvage: bool = False  # auch nicht reparierbare Dateien bergen (Lücken bleiben)
     force: bool = False  # auch Dateien ohne Reparaturbedarf neu verpacken
+    strip_tracks: bool = False  # zugleich überflüssige Spuren nach den Optimizer-Regeln entfernen
 
 
 class JobIn(BaseModel):
@@ -274,6 +277,11 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
         if body.category == "replace" or body.category == "repair_and_replace":
             opts.salvage = True
         params["repair"] = opts.model_dump()
+        if opts.strip_tracks:
+            rules = body.rules or (Rules(**s.optimizer_last_rules) if s.optimizer_last_rules else None)
+            if rules is None:
+                raise HTTPException(400, "Noch keine Spurregeln festgelegt (MKV-Optimizer → Spuren entfernen)")
+            params["rules"] = rules.model_dump()
         name = body.name or ("Notreparatur" if opts.salvage else "Reparatur")
         if body.category:
             wanted = {"repair": {"repair"}, "replace": {"replace"},

@@ -471,3 +471,25 @@ def test_repair_jobs(oclient, opt_env, base_media):
     assert j["done_files"] == 1, j
     assert list(opt_env["output"].rglob("kaputt.mkv"))
     assert sha(media / "kaputt.mkv") == orig  # Original unverändert
+
+
+def test_repair_with_track_removal(oclient, opt_env, multi_src):
+    media = opt_env["media"]
+    mf.copy(multi_src, media / "rest.mkv")
+    with open(media / "rest.mkv", "ab") as fh:
+        fh.write(b"\x00" * 4096)  # per Remux behebbar
+    from conftest import wait_job
+    wait_job(oclient, oclient.post("/api/jobs", json={"task": "incremental", "methods": ["container"]}).json()["id"])
+    fid = files_by_name(oclient)["rest.mkv"]["id"]
+    assert oclient.get(f"/api/files/{fid}").json()["assessment"]["category"] == "repair"
+    r = oclient.post("/api/optimizer/jobs", json={"kind": "repair", "category": "repair",
+                                                  "repair": {"strip_tracks": True}})
+    assert r.status_code == 400 and "Spurregeln" in r.json()["detail"]  # noch keine Regeln gespeichert
+    r = oclient.post("/api/optimizer/jobs", json={"kind": "repair", "category": "repair", "rules": RULES_DTS,
+                                                  "repair": {"strip_tracks": True}})
+    j = wait_opt_job(oclient, r.json()["id"])
+    assert j["state"] == "completed" and j["done_files"] == 1, j
+    s, _ = sig(opt_env["output"] / "rest.mkv")
+    assert [(x[0], x[2]) for x in s] == [("video", "und"), ("audio", "ger"), ("subtitles", "ger")]
+    item = oclient.get(f"/api/optimizer/jobs/{j['id']}/items").json()["items"][0]
+    assert "Spur(en) entfernt" in (item["message"] or "")

@@ -283,7 +283,24 @@ async def _repair(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, sou
     ctx.register_temp(temp)
     toolset = get_toolset()
     meta = ["--no-global-tags", "--no-track-tags"] if ops.remove_metadata else []
-    cmd = [toolset.mkvmerge.path or "mkvmerge", "--ui-language", "en_US", "--gui-mode", "-o", temp, *meta, source]
+    pre: list[str] = []
+    src_args = meta
+    expected = analysis.tracks
+    plan = None
+    if params.get("rules"):
+        # Im selben Durchgang überflüssige Spuren nach den Optimizer-Regeln entfernen
+        plan = compute_plan(analysis, Rules(**params["rules"]), ops)
+        if plan.skip_reason:
+            ctx.log(f"Spuren bleiben unverändert: {plan.skip_reason}")
+            plan = None
+        else:
+            pre, src_args = global_args(plan, ops), mkvmerge_args(plan, analysis, ops)
+            by_id = {t.track_id: t for t in analysis.tracks}
+            expected = [by_id[i] for i in plan.track_order or plan.kept]
+            result.plan = {**(result.plan or {}), **plan.to_dict()}
+            ctx.log("Entfernt: " + ", ".join(f"#{i} ({by_id[i].type}, {by_id[i].language})" for i in plan.removed))
+    cmd = [toolset.mkvmerge.path or "mkvmerge", "--ui-language", "en_US", "--gui-mode", "-o", temp,
+           *pre, *src_args, source]
     rc = await _run(ctx, cmd, "Reparatur (Remux)", 0.03, 0.85, None)
     resyncs = ctx.resyncs
     if rc not in (0, 1):
@@ -293,7 +310,7 @@ async def _repair(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, sou
     if not out.ok:
         raise Fail(f"Ergebnis nicht lesbar: {out.error}")
     got = [(t.type, t.codec_family, t.language) for t in out.tracks]
-    exp = [(t.type, t.codec_family, t.language) for t in analysis.tracks]
+    exp = [(t.type, t.codec_family, t.language) for t in expected]
     if got != exp:
         raise Fail(f"Spuren der reparierten Datei stimmen nicht mit dem Original überein (erwartet {exp}, erhalten {got})")
     summary, err, cancelled = await run_ebml_validator(temp, ctx.control, ctx.limits, ContainerOptions(), None)
@@ -312,6 +329,8 @@ async def _repair(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, sou
     result.backup_path = info.get("backup")
     result.output_size = os.path.getsize(info["final"])
     parts = ["Index und Zeitstempel neu aufgebaut, Struktur geprüft"]
+    if plan is not None:
+        parts.append(f"{len(plan.removed)} Spur(en) entfernt, {(st.st_size - result.output_size) / 1e6:.1f} MB kleiner")
     if analysis.duration and out.duration and abs(analysis.duration - out.duration) > 1:
         parts.append(f"Laufzeit {analysis.duration / 60:.1f} → {out.duration / 60:.1f} min")
     if resyncs:

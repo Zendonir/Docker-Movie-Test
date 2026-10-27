@@ -307,6 +307,11 @@ Dateien „Nicht mehr reparierbar“ werden nur mit **Notreparatur** bearbeitet:
 Bereiche, die Datei ist danach wieder abspielbar und spulbar, dort fehlen aber weiterhin Bild und Ton. Dateien ohne
 Reparaturbedarf werden übersprungen. Für `/output` muss ein beschreibbares Volume eingebunden sein.
 
+**Reparieren und Spuren entfernen in einem Durchgang:** Option *Gleichzeitig überflüssige Spuren entfernen* im
+Reparaturdialog. Es gelten die zuletzt unter *MKV-Optimizer → Spuren entfernen* verwendeten Regeln (dort einmal
+Vorschau mit den gewünschten Sprachen erzeugen – das speichert die Regeln); geschützte Sprachen bleiben, die letzte Audiospur wird nie entfernt.
+Die Prüfung der neuen Datei vergleicht dann gegen die behaltenen Spuren.
+
 CSV mit Semikolon schreibt Zahlen mit Dezimalkomma und drei Nachkommastellen, damit Excel (deutsch) sie
 nicht als Datum („3.67“ → „Mrz 67“) oder Tausenderzahl liest.
 
