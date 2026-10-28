@@ -287,7 +287,7 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
             wanted = {"repair": {"repair"}, "replace": {"replace"},
                       "repair_and_replace": {"repair", "replace"}}[body.category]
             cand = db.scalars(select(MediaFile).where(MediaFile.present.is_(True), MediaFile.extension == "mkv",
-                                                      MediaFile.status.in_(("critical", "error", "warning"))))
+                                                      MediaFile.status.in_(("critical", "error", "warning", "incomplete"))))
             body.file_ids = [f.id for f in cand if assess_file(db, f)["category"] in wanted]
             if not body.file_ids:
                 raise HTTPException(400, "Keine Dateien in dieser Reparaturliste")
