@@ -9,6 +9,13 @@ import type { RepairCandidate, TrackRule } from "../types";
 import { Modal } from "./ui";
 import { useToast } from "./toast";
 
+type ListKey = "repair" | "optional" | "replace";
+const LISTS: { key: ListKey; label: string; hint: string }[] = [
+  { key: "repair", label: "Reparatur empfohlen", hint: "Struktur- und Zeitstempelfehler ohne Datenverlust – per Remux behebbar." },
+  { key: "optional", label: "Kleinere Auffälligkeiten", hint: "Meist problemlos abspielbar – Remux optional, wenn der Player hakt." },
+  { key: "replace", label: "Nicht mehr reparierbar", hint: "Notreparatur: zerstörte Bereiche werden übersprungen, die Datei ist danach wieder abspielbar und spulbar – dort fehlen aber weiterhin Bild und Ton. Besser: neu beschaffen." },
+];
+
 interface Candidates { items: RepairCandidate[]; output_mode: string; output_free: number | null }
 
 /** Reparatur als Optimizer-Auftrag: Remux aller Spuren mit mkvmerge, Ergebnis wird vor dem Abschluss geprüft.
@@ -16,24 +23,28 @@ interface Candidates { items: RepairCandidate[]; output_mode: string; output_fre
 export function RepairDialog({ title, fileIds, category, salvageDefault = false, showSalvage = true, onClose }: {
   title: string;
   fileIds?: number[];
-  category?: "repair" | "replace" | "repair_and_replace";
+  category?: ListKey;
   salvageDefault?: boolean;
   showSalvage?: boolean;
   onClose: () => void;
 }) {
   const status = useOptStatus();
-  const [salvage, setSalvage] = useState(salvageDefault);
+  const [salvageOpt, setSalvage] = useState(salvageDefault);
+  const [list, setList] = useState<ListKey>(category ?? "repair");
+  const salvage = category ? list === "replace" : salvageOpt;
   const [ok, setOk] = useState(false);
   const [strip, setStrip] = useState(false);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [topN, setTopN] = useState(5);
   const cands = useQuery({
-    queryKey: ["repair-candidates", category],
-    queryFn: () => api<Candidates>(`/api/optimizer/repair-candidates?category=${category === "replace" ? "replace" : "repair"}`),
+    queryKey: ["repair-candidates"],
+    queryFn: () => api<Candidates>("/api/optimizer/repair-candidates"),
     enabled: !!category,
   });
-  const open = (cands.data?.items ?? []).filter((c) => !c.repaired);
-  const done = (cands.data?.items ?? []).filter((c) => c.repaired);
+  const inList = (cands.data?.items ?? []).filter((c) => c.category === list);
+  const open = inList.filter((c) => !c.repaired);
+  const done = inList.filter((c) => c.repaired);
+  const counts = (k: ListKey) => (cands.data?.items ?? []).filter((c) => c.category === k && !c.repaired).length;
   const pickedBytes = open.filter((c) => picked.has(c.id)).reduce((a, c) => a + c.size, 0);
   const free = cands.data?.output_free ?? null;
   const ids = category ? [...picked] : fileIds ?? [];
@@ -67,6 +78,15 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
       <div className="space-y-3 text-sm">
         {category && (
           <div className="space-y-2">
+            <div className="flex flex-wrap gap-1">
+              {LISTS.map((l) => (
+                <button key={l.key} className={list === l.key ? "btn-primary text-xs" : "btn-secondary text-xs"}
+                  onClick={() => { setList(l.key); setPicked(new Set()); }}>
+                  {l.label}{cands.data ? ` (${fmtInt(counts(l.key))})` : ""}
+                </button>
+              ))}
+            </div>
+            <p className={`text-xs ${list === "replace" ? "text-orange-500" : "text-slate-500"}`}>{LISTS.find((l) => l.key === list)!.hint}</p>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-slate-500">Obere</span>
               <input type="number" min={1} className="input w-20" value={topN}

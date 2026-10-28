@@ -89,12 +89,12 @@ export function Reports() {
             reicht – und legt dafür einen Reparaturauftrag an (Remux mit mkvmerge, Prüfung der neuen Datei vor der Übernahme).
             Bereits reparierte Filme werden als „Repariert“ geführt und nicht erneut angeboten. Fortschritt und Ergebnis unter <b>MKV-Optimizer → Aufträge</b>.</p>
           <div className="flex flex-wrap gap-2">
-            <button className="btn-primary" onClick={() => setRepair("repair")}><Wrench className="h-4 w-4" />„Sollten repariert werden“ reparieren …</button>
+            <button className="btn-primary" onClick={() => setRepair("repair")}><Wrench className="h-4 w-4" />Filme zum Reparieren auswählen …</button>
             <button className="btn-secondary" onClick={() => setRepair("replace")}><Wrench className="h-4 w-4" />Notreparatur für „Nicht mehr reparierbar“</button>
           </div>
         </div>
       </Card>
-      {repair && <RepairDialog title={repair === "repair" ? "Filme zum Reparieren auswählen" : "Notreparatur nicht reparierbarer Dateien"}
+      {repair && <RepairDialog title="Filme zum Reparieren auswählen"
         category={repair} salvageDefault={repair === "replace"} showSalvage={false} onClose={() => setRepair(null)} />}
     </div>
   );

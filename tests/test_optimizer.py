@@ -511,7 +511,7 @@ def test_repair_job_processes_all_files(oclient, opt_env, base_media):
     assert j["done_files"] == 3, [(i["state"], i["message"]) for i in items]
 
     # Auswahlliste: reparierte Dateien sind markiert, Auswahl einzelner Dateien möglich
-    c = oclient.get("/api/optimizer/repair-candidates?category=repair").json()
+    c = oclient.get("/api/optimizer/repair-candidates").json()
     assert len(c["items"]) == 3 and all(x["repaired"] for x in c["items"]), c
     assert oclient.get(f"/api/files/{c['items'][0]['id']}").json()["assessment"]["repaired"]["output_path"]
     for n in ("d", "e"):
@@ -519,10 +519,10 @@ def test_repair_job_processes_all_files(oclient, opt_env, base_media):
         with open(media / f"{n}.mkv", "ab") as fh:
             fh.write(b"\x00" * 4096)
     wait_job(oclient, oclient.post("/api/jobs", json={"task": "incremental", "methods": ["container"]}).json()["id"])
-    c = oclient.get("/api/optimizer/repair-candidates?category=repair").json()
+    c = oclient.get("/api/optimizer/repair-candidates").json()
     open_ids = [x["id"] for x in c["items"] if not x["repaired"]]
     assert [x["filename"] for x in c["items"] if not x["repaired"]] == ["d.mkv", "e.mkv"]
     j = wait_opt_job(oclient, oclient.post("/api/optimizer/jobs", json={"kind": "repair", "file_ids": open_ids[:1]}).json()["id"])
     assert j["done_files"] == 1 and j["total_files"] == 1
-    c = oclient.get("/api/optimizer/repair-candidates?category=repair").json()
+    c = oclient.get("/api/optimizer/repair-candidates").json()
     assert [x["filename"] for x in c["items"] if not x["repaired"]] == ["e.mkv"]

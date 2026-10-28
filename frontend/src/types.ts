@@ -126,6 +126,7 @@ export interface RepairCandidate {
   rel_path: string;
   library: string | null;
   size: number;
+  category: "repair" | "optional" | "replace";
   reasons: string;
   repaired: RepairedInfo | null;
 }

@@ -295,7 +295,8 @@ die *Reparaturübersicht* (alle Dateien nach Empfehlung gruppiert, als HTML mit 
 API: `/api/export?scope=replace|repair|assessment&format=csv|json|html`.
 
 **Direkt reparieren:** *Reparieren …* auf der Detailseite, in der Dateiliste für ausgewählte Dateien oder unter
-*Berichte → Direkt reparieren* für die Listen. Dort erscheinen die offenen Filme der Liste zum Anhaken (mit
+*Berichte → Direkt reparieren* für die Listen (umschaltbar: „Reparatur empfohlen“, „Kleinere Auffälligkeiten“,
+„Nicht mehr reparierbar“ als Notreparatur). Dort erscheinen die offenen Filme der Liste zum Anhaken (mit
 „Obere X auswählen“, Summe der Größen und freiem Platz im Ziel), damit sich die Liste in Etappen abarbeiten lässt.
 Bereits reparierte Filme (Original unverändert, reparierte Fassung vorhanden) stehen als „Repariert“ darunter und
 werden nicht erneut angeboten; auf der Detailseite steht „Repariert → Zielpfad“. Die Reparatur läuft als Auftrag im MKV-Optimizer

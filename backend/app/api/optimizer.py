@@ -78,13 +78,15 @@ def status(db: Session = Depends(get_db)):
 
 
 @router.get("/repair-candidates")
-def repair_candidates(category: Literal["repair", "replace"] = "repair", db: Session = Depends(get_db)):
-    """Auswahlliste für Reparaturaufträge: offene Dateien und bereits reparierte (nicht mehr auswählbar)."""
+def repair_candidates(db: Session = Depends(get_db)):
+    """Auswahlliste für Reparaturaufträge (alle reparierbaren Kategorien): offene Dateien und bereits
+    reparierte (nicht mehr auswählbar)."""
     libs = {lib.id: lib.name for lib in db.scalars(select(Library))}
-    cands = assess_candidates(db, {category})
+    cands = assess_candidates(db, {"repair", "optional", "replace"})
     done = repaired_files(db, [f.id for f, _ in cands])
     rows = [{"id": f.id, "filename": f.filename, "rel_path": f.rel_path, "library": libs.get(f.library_id),
-             "size": f.size, "reasons": r["reason_text"], "repaired": done.get(f.id)} for f, r in cands]
+             "size": f.size, "category": r["category"], "reasons": r["reason_text"], "repaired": done.get(f.id)}
+            for f, r in cands]
     s = load_settings(db)
     out_mode = FileOps.from_settings(s).output_mode
     free = None
@@ -93,7 +95,7 @@ def repair_candidates(category: Literal["repair", "replace"] = "repair", db: Ses
             free = shutil.disk_usage(fileops.output_root()).free
         except OSError:
             free = None
-    return {"category": category, "items": rows, "output_mode": out_mode, "output_free": free}
+    return {"items": rows, "output_mode": out_mode, "output_free": free}
 
 
 # ---------------------------------------------------------------- Analyse
