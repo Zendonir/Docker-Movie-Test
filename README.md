@@ -295,7 +295,10 @@ die *Reparaturübersicht* (alle Dateien nach Empfehlung gruppiert, als HTML mit 
 API: `/api/export?scope=replace|repair|assessment&format=csv|json|html`.
 
 **Direkt reparieren:** *Reparieren …* auf der Detailseite, in der Dateiliste für ausgewählte Dateien oder unter
-*Berichte → Direkt reparieren* für ganze Listen. Die Reparatur läuft als Auftrag im MKV-Optimizer
+*Berichte → Direkt reparieren* für die Listen. Dort erscheinen die offenen Filme der Liste zum Anhaken (mit
+„Obere X auswählen“, Summe der Größen und freiem Platz im Ziel), damit sich die Liste in Etappen abarbeiten lässt.
+Bereits reparierte Filme (Original unverändert, reparierte Fassung vorhanden) stehen als „Repariert“ darunter und
+werden nicht erneut angeboten; auf der Detailseite steht „Repariert → Zielpfad“. Die Reparatur läuft als Auftrag im MKV-Optimizer
 (*Aufträge*, mit Pause/Abbruch/Fortsetzen nach Neustart):
 
 1. mkvmerge verpackt die Datei mit **allen Spuren** neu – Index (Cues), Zeitstempel, Laufzeitangabe und

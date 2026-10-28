@@ -115,6 +115,19 @@ export interface Assessment {
   action: string;
   reasons: string[];
   reason_text: string;
+  repaired?: RepairedInfo | null;
+}
+
+export interface RepairedInfo { output_path: string; repaired_at: string | null }
+
+export interface RepairCandidate {
+  id: number;
+  filename: string;
+  rel_path: string;
+  library: string | null;
+  size: number;
+  reasons: string;
+  repaired: RepairedInfo | null;
 }
 
 export interface FileDetail extends MediaFileSummary {

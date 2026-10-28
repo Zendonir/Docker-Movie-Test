@@ -239,7 +239,12 @@ function AssessmentBox({ a }: { a?: FileDetail["assessment"] }) {
     <div className={`mt-2 max-w-3xl rounded border px-3 py-2 text-sm ${ASSESS_STYLE[a.category] ?? ""}`}>
       <div className="font-semibold">Empfehlung: {a.label}</div>
       {a.reasons.length > 0 && <div className="text-xs">{a.reason_text}</div>}
-      <div className="text-xs opacity-80">{a.action}</div>
+      {a.repaired ? (
+        <div className="mt-1 text-xs font-semibold text-green-600 dark:text-green-400">
+          Repariert{a.repaired.repaired_at ? ` am ${fmtDate(a.repaired.repaired_at)}` : ""} → {a.repaired.output_path}
+          <span className="block font-normal opacity-80">Original noch unverändert – nach dem Ersetzen wird die Datei neu geprüft.</span>
+        </div>
+      ) : <div className="text-xs opacity-80">{a.action}</div>}
     </div>
   );
 }

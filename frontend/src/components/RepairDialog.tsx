@@ -1,14 +1,18 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Wrench } from "lucide-react";
-import { post } from "../api";
+import { api, post } from "../api";
+import { fmtBytes, fmtInt } from "../format";
 import { useOptStatus } from "../pages/optimizer/common";
-import type { TrackRule } from "../types";
+import type { RepairCandidate, TrackRule } from "../types";
 import { Modal } from "./ui";
 import { useToast } from "./toast";
 
-/** Reparatur als Optimizer-Auftrag: Remux aller Spuren mit mkvmerge, Ergebnis wird vor dem Abschluss geprüft. */
+interface Candidates { items: RepairCandidate[]; output_mode: string; output_free: number | null }
+
+/** Reparatur als Optimizer-Auftrag: Remux aller Spuren mit mkvmerge, Ergebnis wird vor dem Abschluss geprüft.
+ *  Mit `category` wird vorher die Liste der offenen Dateien zum Auswählen angezeigt. */
 export function RepairDialog({ title, fileIds, category, salvageDefault = false, showSalvage = true, onClose }: {
   title: string;
   fileIds?: number[];
@@ -21,6 +25,18 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
   const [salvage, setSalvage] = useState(salvageDefault);
   const [ok, setOk] = useState(false);
   const [strip, setStrip] = useState(false);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [topN, setTopN] = useState(5);
+  const cands = useQuery({
+    queryKey: ["repair-candidates", category],
+    queryFn: () => api<Candidates>(`/api/optimizer/repair-candidates?category=${category === "replace" ? "replace" : "repair"}`),
+    enabled: !!category,
+  });
+  const open = (cands.data?.items ?? []).filter((c) => !c.repaired);
+  const done = (cands.data?.items ?? []).filter((c) => c.repaired);
+  const pickedBytes = open.filter((c) => picked.has(c.id)).reduce((a, c) => a + c.size, 0);
+  const free = cands.data?.output_free ?? null;
+  const ids = category ? [...picked] : fileIds ?? [];
   const toast = useToast();
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -29,25 +45,70 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
   const replaces = mode === "replace_backup" || mode === "replace_delete";
   const m = useMutation({
     mutationFn: () => post<{ id: number; total_files: number }>("/api/optimizer/jobs", {
-      kind: "repair", file_ids: fileIds ?? [], category, repair: { salvage, strip_tracks: strip },
+      kind: "repair", file_ids: ids, repair: { salvage, strip_tracks: strip },
     }),
     onSuccess: (j) => {
       toast(`Reparaturauftrag mit ${j.total_files} Datei(en) angelegt`, "ok");
       qc.invalidateQueries({ queryKey: ["opt-jobs"] });
+      qc.invalidateQueries({ queryKey: ["repair-candidates"] });
       onClose();
       nav("/optimizer/auftraege");
     },
     onError: (e: Error) => toast(e.message, "error"),
   });
   return (
-    <Modal open title={title} onClose={onClose}
+    <Modal open title={title} onClose={onClose} wide={!!category}
       footer={<>
         <button className="btn-secondary" onClick={onClose}>Abbrechen</button>
-        <button className="btn-primary" disabled={!ok || m.isPending || !modeInfo?.available} onClick={() => m.mutate()}>
+        <button className="btn-primary" disabled={!ok || m.isPending || !modeInfo?.available || ids.length === 0} onClick={() => m.mutate()}>
           <Wrench className="h-4 w-4" />{m.isPending ? "Auftrag wird angelegt …" : "Reparatur starten"}
         </button>
       </>}>
       <div className="space-y-3 text-sm">
+        {category && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-500">Obere</span>
+              <input type="number" min={1} className="input w-20" value={topN}
+                onChange={(e) => setTopN(Math.max(1, Number(e.target.value) || 1))} />
+              <button className="btn-secondary text-xs" onClick={() => setPicked(new Set(open.slice(0, topN).map((c) => c.id)))}>auswählen</button>
+              <button className="btn-ghost text-xs" onClick={() => setPicked(new Set(open.map((c) => c.id)))}>Alle</button>
+              <button className="btn-ghost text-xs" onClick={() => setPicked(new Set())}>Keine</button>
+            </div>
+            <div className="text-xs">
+              <b>{fmtInt(picked.size)}</b> von {fmtInt(open.length)} ausgewählt · {fmtBytes(pickedBytes)}
+              {free !== null && <> · frei im Ziel: {fmtBytes(free)}</>}
+              {free !== null && pickedBytes * 1.05 > free &&
+                <span className="ml-1 text-red-500">– reicht voraussichtlich nicht für alle ausgewählten Filme</span>}
+            </div>
+            <div className="max-h-72 overflow-y-auto rounded border border-slate-500/30">
+              {cands.isLoading && <div className="p-3 text-xs text-slate-500">Liste wird geladen …</div>}
+              {cands.data && open.length === 0 && <div className="p-3 text-xs text-slate-500">Keine offenen Dateien in dieser Liste.</div>}
+              {open.map((c) => (
+                <label key={c.id} className="flex cursor-pointer items-start gap-2 border-b border-slate-500/20 px-2 py-1.5 last:border-0">
+                  <input type="checkbox" className="mt-1" checked={picked.has(c.id)} onChange={(e) => {
+                    const n = new Set(picked);
+                    if (e.target.checked) n.add(c.id); else n.delete(c.id);
+                    setPicked(n);
+                  }} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words">{c.filename}</span>
+                    <span className="block text-xs text-slate-500">{fmtBytes(c.size)}{c.reasons ? ` · ${c.reasons}` : ""}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {done.length > 0 && (
+              <details className="text-xs">
+                <summary className="cursor-pointer text-green-600 dark:text-green-400">Bereits repariert ({fmtInt(done.length)}) – nicht erneut auswählbar</summary>
+                <ul className="mt-1 space-y-1">
+                  {done.map((c) => <li key={c.id} className="break-words">{c.filename} <span className="text-slate-500">→ {c.repaired!.output_path}</span></li>)}
+                </ul>
+                <p className="mt-1 text-slate-500">Ersetzt du das Original durch die reparierte Fassung, wird der Film neu geprüft und verschwindet aus der Liste.</p>
+              </details>
+            )}
+          </div>
+        )}
         <p>Die Datei wird mit <b>mkvmerge</b> neu verpackt (alle Spuren bleiben erhalten). Dabei werden Index (Cues),
           Zeitstempel, Laufzeitangabe und Clusterstruktur neu aufgebaut und Restdaten nach dem Dateiende verworfen.
           Die neue Datei wird vor dem Abschluss auf Spuren und Struktur geprüft – erst dann wird sie übernommen.</p>

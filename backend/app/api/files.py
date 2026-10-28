@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import get_config
 from ..database import get_db
 from ..models import DetectedError, Library, MediaFile, MediaStream, ScanResult
-from ..services.repairability import assess
+from ..services.repairability import assess, repaired_files
 from ..services import repair
 from ..services.labels import CHECK_LEVEL_LABELS, METHOD_LABELS, OUTCOME_LABELS, STATUS_LABELS, error_type_label
 from ..services.pathsec import is_within
@@ -203,7 +203,7 @@ def file_detail(file_id: int, db: Session = Depends(get_db)):
         } for s in streams],
         "current_results": {m: _result_dict(r) for m, r in current.items()},
         "errors": err_dicts,
-        "assessment": assess(f.status, err_dicts),
+        "assessment": {**assess(f.status, err_dicts), "repaired": repaired_files(db, [f.id]).get(f.id)},
         "history": [_result_dict(r) for r in history],
         "repair_enabled": repair.repair_enabled(),
         "repair_actions": repair.ACTIONS if repair.repair_enabled() else {},

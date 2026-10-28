@@ -85,15 +85,16 @@ export function Reports() {
       </Card>
       <Card title="Direkt reparieren">
         <div className="space-y-3 text-sm">
-          <p>Legt einen Reparaturauftrag für alle MKV-Dateien der jeweiligen Liste an (Remux mit mkvmerge, Prüfung der
-            neuen Datei vor der Übernahme). Fortschritt und Ergebnis unter <b>MKV-Optimizer → Aufträge</b>.</p>
+          <p>Zeigt die MKV-Dateien der jeweiligen Liste zum Auswählen an – z. B. die oberen 5, damit der Platz im Ziel
+            reicht – und legt dafür einen Reparaturauftrag an (Remux mit mkvmerge, Prüfung der neuen Datei vor der Übernahme).
+            Bereits reparierte Filme werden als „Repariert“ geführt und nicht erneut angeboten. Fortschritt und Ergebnis unter <b>MKV-Optimizer → Aufträge</b>.</p>
           <div className="flex flex-wrap gap-2">
-            <button className="btn-primary" onClick={() => setRepair("repair")}><Wrench className="h-4 w-4" />Alle „Sollten repariert werden“ reparieren</button>
+            <button className="btn-primary" onClick={() => setRepair("repair")}><Wrench className="h-4 w-4" />„Sollten repariert werden“ reparieren …</button>
             <button className="btn-secondary" onClick={() => setRepair("replace")}><Wrench className="h-4 w-4" />Notreparatur für „Nicht mehr reparierbar“</button>
           </div>
         </div>
       </Card>
-      {repair && <RepairDialog title={repair === "repair" ? "Reparaturliste reparieren" : "Notreparatur nicht reparierbarer Dateien"}
+      {repair && <RepairDialog title={repair === "repair" ? "Filme zum Reparieren auswählen" : "Notreparatur nicht reparierbarer Dateien"}
         category={repair} salvageDefault={repair === "replace"} showSalvage={false} onClose={() => setRepair(null)} />}
     </div>
   );

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import shlex
+import shutil
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..services.repairability import files_in_categories
+from ..services.repairability import assess_candidates, files_in_categories, repaired_files
 from ..database import get_db
 from ..models import Library, MediaFile, OptimizerItem, OptimizerJob, OptimizerProfile
 from ..optimizer import fileops, service
@@ -75,6 +75,25 @@ def status(db: Session = Depends(get_db)):
         "last_rules": s.optimizer_last_rules or Rules(audio=TrackRule(), subtitles=TrackRule()).model_dump(),
         "libraries": [{"id": lib.id, "name": lib.name, "path": lib.path} for lib in libs],
     }
+
+
+@router.get("/repair-candidates")
+def repair_candidates(category: Literal["repair", "replace"] = "repair", db: Session = Depends(get_db)):
+    """Auswahlliste für Reparaturaufträge: offene Dateien und bereits reparierte (nicht mehr auswählbar)."""
+    libs = {lib.id: lib.name for lib in db.scalars(select(Library))}
+    cands = assess_candidates(db, {category})
+    done = repaired_files(db, [f.id for f, _ in cands])
+    rows = [{"id": f.id, "filename": f.filename, "rel_path": f.rel_path, "library": libs.get(f.library_id),
+             "size": f.size, "reasons": r["reason_text"], "repaired": done.get(f.id)} for f, r in cands]
+    s = load_settings(db)
+    out_mode = FileOps.from_settings(s).output_mode
+    free = None
+    if out_mode == "output_dir":
+        try:
+            free = shutil.disk_usage(fileops.output_root()).free
+        except OSError:
+            free = None
+    return {"category": category, "items": rows, "output_mode": out_mode, "output_free": free}
 
 
 # ---------------------------------------------------------------- Analyse
@@ -290,12 +309,7 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
             ids = files_in_categories(db, wanted)
             if not ids:
                 raise HTTPException(400, "Keine Dateien in dieser Reparaturliste")
-            # Unveränderte Originale, deren Reparatur schon vorliegt, nicht erneut reparieren
-            done = {fid for fid, out, size, cur in db.execute(
-                select(OptimizerItem.file_id, OptimizerItem.output_path, OptimizerItem.size, MediaFile.size)
-                .join(OptimizerJob).join(MediaFile, MediaFile.id == OptimizerItem.file_id)
-                .where(OptimizerJob.kind == "repair", OptimizerItem.state == "done", OptimizerItem.file_id.in_(ids)))
-                if size == cur and out and os.path.exists(out)}
+            done = repaired_files(db, ids)  # bereits reparierte, unveränderte Originale nicht erneut reparieren
             body.file_ids = [i for i in ids if i not in done]
             if not body.file_ids:
                 raise HTTPException(400, f"Alle {len(ids)} Datei(en) dieser Liste wurden bereits repariert – "

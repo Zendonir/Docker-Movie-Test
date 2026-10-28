@@ -182,19 +182,23 @@ def assess_file(db, mf) -> dict:
     return assess(mf.status, findings)
 
 
-def files_in_categories(db, wanted: set[str], batch: int = 500) -> list[int]:
-    """IDs aller vorhandenen MKV-Dateien, deren Bewertung in `wanted` liegt (Sammelabfragen statt je Datei)."""
+
+def assess_candidates(db, wanted: set[str], batch: int = 500) -> list[tuple]:
+    """(Dateizeile, Bewertung) aller vorhandenen MKV-Dateien, deren Bewertung in `wanted` liegt.
+
+    Sammelabfragen statt je Datei – bei großen Bibliotheken sonst zu langsam."""
     from sqlalchemy import select
 
     from ..models import DetectedError, MediaFile, ScanResult
 
-    files = db.execute(select(MediaFile.id, MediaFile.status, MediaFile.fingerprint_version).where(
+    files = db.execute(select(MediaFile.id, MediaFile.status, MediaFile.fingerprint_version, MediaFile.filename,
+                              MediaFile.rel_path, MediaFile.library_id, MediaFile.size).where(
         MediaFile.present.is_(True), MediaFile.extension == "mkv",
         MediaFile.status.in_(("critical", "error", "warning", "incomplete"))).order_by(MediaFile.rel_path)).all()
-    out: list[int] = []
+    out: list[tuple] = []
     for i in range(0, len(files), batch):
         chunk = files[i:i + batch]
-        fp = {fid: v for fid, _, v in chunk}
+        fp = {f.id: f.fingerprint_version for f in chunk}
         current: dict[tuple[int, str], int] = {}  # (Datei, Methode) -> neuestes aktuelles Ergebnis
         for rid, fid, method, rfp in db.execute(
                 select(ScanResult.id, ScanResult.file_id, ScanResult.method, ScanResult.fingerprint_version)
@@ -212,5 +216,36 @@ def files_in_categories(db, wanted: set[str], batch: int = 500) -> list[int]:
                 findings.setdefault(row.file_id, []).append(
                     {"error_type": row.error_type, "severity": row.severity, "description": row.description,
                      "raw_message": row.raw_message, "stream_type": row.stream_type, "occurrences": row.occurrences})
-        out += [fid for fid, status, _ in chunk if assess(status, findings.get(fid, []))["category"] in wanted]
+        for f in chunk:
+            rating = assess(f.status, findings.get(f.id, []))
+            if rating["category"] in wanted:
+                out.append((f, rating))
+    return out
+
+
+def files_in_categories(db, wanted: set[str]) -> list[int]:
+    return [f.id for f, _ in assess_candidates(db, wanted)]
+
+
+def repaired_files(db, file_ids: list[int]) -> dict[int, dict]:
+    """Dateien, deren Reparatur bereits vorliegt: unverändertes Original und Ergebnis noch vorhanden.
+
+    Wird das Original durch die reparierte Fassung ersetzt, ändert sich die Datei und wird neu geprüft."""
+    import os
+
+    from sqlalchemy import select
+
+    from ..models import MediaFile, OptimizerItem, OptimizerJob
+
+    out: dict[int, dict] = {}
+    for i in range(0, len(file_ids), 500):
+        for fid, path, size, cur, at in db.execute(
+                select(OptimizerItem.file_id, OptimizerItem.output_path, OptimizerItem.size, MediaFile.size,
+                       OptimizerItem.finished_at)
+                .join(OptimizerJob).join(MediaFile, MediaFile.id == OptimizerItem.file_id)
+                .where(OptimizerJob.kind == "repair", OptimizerItem.state == "done",
+                       OptimizerItem.file_id.in_(file_ids[i:i + 500]))
+                .order_by(OptimizerItem.finished_at)):
+            if size == cur and path and os.path.exists(path):
+                out[fid] = {"output_path": path, "repaired_at": at}
     return out
