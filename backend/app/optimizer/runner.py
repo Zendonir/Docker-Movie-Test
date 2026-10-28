@@ -309,8 +309,9 @@ async def _repair(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, sou
     out = await identify(temp, ctx.control, ctx.limits)
     if not out.ok:
         raise Fail(f"Ergebnis nicht lesbar: {out.error}")
-    got = [(t.type, t.codec_family, t.language) for t in out.tracks]
-    exp = [(t.type, t.codec_family, t.language) for t in expected]
+    # Reihenfolge nicht vergleichen: mkvmerge ordnet die Spuren beim Remux teils um (Video, Audio, Untertitel)
+    got = sorted((t.type, t.codec_family or "", t.language) for t in out.tracks)
+    exp = sorted((t.type, t.codec_family or "", t.language) for t in expected)
     if got != exp:
         raise Fail(f"Spuren der reparierten Datei stimmen nicht mit dem Original überein (erwartet {exp}, erhalten {got})")
     summary, err, cancelled = await run_ebml_validator(temp, ctx.control, ctx.limits, ContainerOptions(), None)

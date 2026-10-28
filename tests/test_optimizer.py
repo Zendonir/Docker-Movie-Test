@@ -526,3 +526,20 @@ def test_repair_job_processes_all_files(oclient, opt_env, base_media):
     assert j["done_files"] == 1 and j["total_files"] == 1
     c = oclient.get("/api/optimizer/repair-candidates").json()
     assert [x["filename"] for x in c["items"] if not x["repaired"]] == ["e.mkv"]
+
+
+def test_repair_accepts_reordered_tracks(oclient, opt_env, tmp_path):
+    """mkvmerge sortiert Spuren beim Remux um (Untertitel vor Audio -> Audio vor Untertitel)."""
+    import subprocess
+    srt = tmp_path / "s.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nHallo\n", encoding="utf-8")
+    src = opt_env["media"] / "umsortiert.mkv"
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=160x120:rate=25",
+                    "-f", "lavfi", "-i", "sine", "-i", str(srt), "-t", "3", "-map", "0", "-map", "2", "-map", "1",
+                    "-c:v", "mpeg4", "-c:a", "ac3", "-c:s", "srt", str(src)], check=True)
+    analyze(oclient)
+    fid = files_by_name(oclient)["umsortiert.mkv"]["id"]
+    j = wait_opt_job(oclient, oclient.post("/api/optimizer/jobs", json={
+        "kind": "repair", "file_ids": [fid], "repair": {"force": True}}).json()["id"])
+    items = oclient.get(f"/api/optimizer/jobs/{j['id']}/items").json()["items"]
+    assert j["done_files"] == 1, items[0]["message"]
