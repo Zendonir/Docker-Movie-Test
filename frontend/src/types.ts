@@ -129,6 +129,7 @@ export interface RepairCandidate {
   category: "repair" | "optional" | "replace";
   reasons: string;
   repaired: RepairedInfo | null;
+  failed: string | null;
 }
 
 export interface FileDetail extends MediaFileSummary {

@@ -526,6 +526,19 @@ def test_repair_job_processes_all_files(oclient, opt_env, base_media):
     assert j["done_files"] == 1 and j["total_files"] == 1
     c = oclient.get("/api/optimizer/repair-candidates").json()
     assert [x["filename"] for x in c["items"] if not x["repaired"]] == ["e.mkv"]
+    # Fehlgeschlagene Reparatur wird in der Auswahlliste vermerkt
+    from app.database import session_scope
+    from app.models import OptimizerItem, OptimizerJob
+    e = next(x for x in c["items"] if x["filename"] == "e.mkv")
+    with session_scope() as db:
+        job = OptimizerJob(kind="repair", name="t", state="completed", params={}, total_files=1, total_bytes=0, events=[])
+        db.add(job)
+        db.flush()
+        db.add(OptimizerItem(job_id=job.id, file_id=e["id"], seq=0, state="failed", source_path="x", size=e["size"],
+                             message="Clusterzeitstempel springt rückwärts"))
+        db.commit()
+    c = oclient.get("/api/optimizer/repair-candidates").json()
+    assert next(x for x in c["items"] if x["filename"] == "e.mkv")["failed"] == "Clusterzeitstempel springt rückwärts"
 
 
 def test_repair_accepts_reordered_tracks(oclient, opt_env, tmp_path):

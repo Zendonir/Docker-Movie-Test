@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..services.repairability import assess_candidates, files_in_categories, repaired_files
+from ..services.repairability import assess_candidates, failed_repairs, files_in_categories, repaired_files
 from ..database import get_db
 from ..models import Library, MediaFile, OptimizerItem, OptimizerJob, OptimizerProfile
 from ..optimizer import fileops, service
@@ -84,9 +84,10 @@ def repair_candidates(db: Session = Depends(get_db)):
     libs = {lib.id: lib.name for lib in db.scalars(select(Library))}
     cands = assess_candidates(db, {"repair", "optional", "replace"})
     done = repaired_files(db, [f.id for f, _ in cands])
+    failed = failed_repairs(db, [f.id for f, _ in cands if f.id not in done])
     rows = [{"id": f.id, "filename": f.filename, "rel_path": f.rel_path, "library": libs.get(f.library_id),
-             "size": f.size, "category": r["category"], "reasons": r["reason_text"], "repaired": done.get(f.id)}
-            for f, r in cands]
+             "size": f.size, "category": r["category"], "reasons": r["reason_text"], "repaired": done.get(f.id),
+             "failed": failed.get(f.id)} for f, r in cands]
     s = load_settings(db)
     out_mode = FileOps.from_settings(s).output_mode
     free = None

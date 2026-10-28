@@ -91,12 +91,13 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
               <span className="text-xs text-slate-500">Obere</span>
               <input type="number" min={1} className="input w-20" value={topN}
                 onChange={(e) => setTopN(Math.max(1, Number(e.target.value) || 1))} />
-              <button className="btn-secondary text-xs" onClick={() => setPicked(new Set(open.slice(0, topN).map((c) => c.id)))}>auswählen</button>
-              <button className="btn-ghost text-xs" onClick={() => setPicked(new Set(open.map((c) => c.id)))}>Alle</button>
+              <button className="btn-secondary text-xs" onClick={() => setPicked(new Set(open.filter((c) => !c.failed).slice(0, topN).map((c) => c.id)))}>auswählen</button>
+              <button className="btn-ghost text-xs" onClick={() => setPicked(new Set(open.filter((c) => !c.failed).map((c) => c.id)))}>Alle</button>
               <button className="btn-ghost text-xs" onClick={() => setPicked(new Set())}>Keine</button>
             </div>
             <div className="text-xs">
-              <b>{fmtInt(picked.size)}</b> von {fmtInt(open.length)} ausgewählt · {fmtBytes(pickedBytes)}
+              <b>{fmtInt(picked.size)}</b> von {fmtInt(open.length)} ausgewählt
+              {open.some((c) => c.failed) && <> · {fmtInt(open.filter((c) => c.failed).length)} fehlgeschlagen (nur einzeln wählbar)</>} · {fmtBytes(pickedBytes)}
               {free !== null && <> · frei im Ziel: {fmtBytes(free)}</>}
               {free !== null && pickedBytes * 1.05 > free &&
                 <span className="ml-1 text-red-500">– reicht voraussichtlich nicht für alle ausgewählten Filme</span>}
@@ -120,6 +121,7 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
                   <span className="min-w-0 flex-1">
                     <span className="block break-words">{c.filename}</span>
                     <span className="block text-xs text-slate-500">{fmtBytes(c.size)}{c.reasons ? ` · ${c.reasons}` : ""}</span>
+                    {c.failed && <span className="block text-xs text-red-500">Letzte Reparatur fehlgeschlagen: {c.failed}</span>}
                   </span>
                 </label>
               ))}

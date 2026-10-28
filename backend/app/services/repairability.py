@@ -252,3 +252,22 @@ def repaired_files(db, file_ids: list[int]) -> dict[int, dict]:
             if size == cur and path and os.path.exists(path):
                 out[fid] = {"output_path": path, "repaired_at": at}
     return out
+
+
+def failed_repairs(db, file_ids: list[int]) -> dict[int, str]:
+    """Letzte fehlgeschlagene Reparatur je Datei, sofern das Original seitdem unverändert ist."""
+    from sqlalchemy import select
+
+    from ..models import MediaFile, OptimizerItem, OptimizerJob
+
+    out: dict[int, str] = {}
+    for i in range(0, len(file_ids), 500):
+        for fid, msg, size, cur in db.execute(
+                select(OptimizerItem.file_id, OptimizerItem.message, OptimizerItem.size, MediaFile.size)
+                .join(OptimizerJob).join(MediaFile, MediaFile.id == OptimizerItem.file_id)
+                .where(OptimizerJob.kind == "repair", OptimizerItem.state == "failed",
+                       OptimizerItem.file_id.in_(file_ids[i:i + 500]))
+                .order_by(OptimizerItem.finished_at)):
+            if size == cur:
+                out[fid] = msg or "fehlgeschlagen"
+    return out
