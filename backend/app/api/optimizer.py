@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import shlex
 from typing import Literal
 
@@ -286,9 +287,19 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
         if body.category:
             wanted = {"repair": {"repair"}, "replace": {"replace"},
                       "repair_and_replace": {"repair", "replace"}}[body.category]
-            body.file_ids = files_in_categories(db, wanted)
-            if not body.file_ids:
+            ids = files_in_categories(db, wanted)
+            if not ids:
                 raise HTTPException(400, "Keine Dateien in dieser Reparaturliste")
+            # Unveränderte Originale, deren Reparatur schon vorliegt, nicht erneut reparieren
+            done = {fid for fid, out, size, cur in db.execute(
+                select(OptimizerItem.file_id, OptimizerItem.output_path, OptimizerItem.size, MediaFile.size)
+                .join(OptimizerJob).join(MediaFile, MediaFile.id == OptimizerItem.file_id)
+                .where(OptimizerJob.kind == "repair", OptimizerItem.state == "done", OptimizerItem.file_id.in_(ids)))
+                if size == cur and out and os.path.exists(out)}
+            body.file_ids = [i for i in ids if i not in done]
+            if not body.file_ids:
+                raise HTTPException(400, f"Alle {len(ids)} Datei(en) dieser Liste wurden bereits repariert – "
+                                         "die reparierten Fassungen liegen im Ausgabeverzeichnis")
     elif body.kind == "remux":
         rules = body.rules or Rules()
         params["rules"] = rules.model_dump()

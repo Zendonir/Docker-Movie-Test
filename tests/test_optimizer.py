@@ -460,6 +460,9 @@ def test_repair_jobs(oclient, opt_env, base_media):
     assert j["done_files"] == 1 and j["state"] == "completed", j
     out = list(opt_env["output"].rglob("restdaten.mkv"))
     assert out and out[0].stat().st_size < (media / "restdaten.mkv").stat().st_size
+    # Bereits reparierte Datei wird über die Liste nicht erneut repariert
+    r = oclient.post("/api/optimizer/jobs", json={"kind": "repair", "category": "repair"})
+    assert r.status_code == 400 and "bereits repariert" in r.json()["detail"], r.text
 
     # Ohne Notreparatur werden verlorene Dateien und Dateien ohne Bedarf übersprungen
     ids = [files["gut.mkv"]["id"], files["kaputt.mkv"]["id"]]
