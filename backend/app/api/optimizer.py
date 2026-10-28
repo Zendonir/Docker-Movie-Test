@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..services.repairability import assess_file
+from ..services.repairability import files_in_categories
 from ..database import get_db
 from ..models import Library, MediaFile, OptimizerItem, OptimizerJob, OptimizerProfile
 from ..optimizer import fileops, service
@@ -286,9 +286,7 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
         if body.category:
             wanted = {"repair": {"repair"}, "replace": {"replace"},
                       "repair_and_replace": {"repair", "replace"}}[body.category]
-            cand = db.scalars(select(MediaFile).where(MediaFile.present.is_(True), MediaFile.extension == "mkv",
-                                                      MediaFile.status.in_(("critical", "error", "warning", "incomplete"))))
-            body.file_ids = [f.id for f in cand if assess_file(db, f)["category"] in wanted]
+            body.file_ids = files_in_categories(db, wanted)
             if not body.file_ids:
                 raise HTTPException(400, "Keine Dateien in dieser Reparaturliste")
     elif body.kind == "remux":

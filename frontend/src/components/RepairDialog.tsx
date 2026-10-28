@@ -44,7 +44,7 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
       footer={<>
         <button className="btn-secondary" onClick={onClose}>Abbrechen</button>
         <button className="btn-primary" disabled={!ok || m.isPending || !modeInfo?.available} onClick={() => m.mutate()}>
-          <Wrench className="h-4 w-4" />Reparatur starten
+          <Wrench className="h-4 w-4" />{m.isPending ? "Auftrag wird angelegt …" : "Reparatur starten"}
         </button>
       </>}>
       <div className="space-y-3 text-sm">

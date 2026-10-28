@@ -180,3 +180,37 @@ def assess_file(db, mf) -> dict:
                              "raw_message": e.raw_message, "tool": e.tool, "stream_type": e.stream_type,
                              "occurrences": e.occurrences, "heuristic": e.heuristic})
     return assess(mf.status, findings)
+
+
+def files_in_categories(db, wanted: set[str], batch: int = 500) -> list[int]:
+    """IDs aller vorhandenen MKV-Dateien, deren Bewertung in `wanted` liegt (Sammelabfragen statt je Datei)."""
+    from sqlalchemy import select
+
+    from ..models import DetectedError, MediaFile, ScanResult
+
+    files = db.execute(select(MediaFile.id, MediaFile.status, MediaFile.fingerprint_version).where(
+        MediaFile.present.is_(True), MediaFile.extension == "mkv",
+        MediaFile.status.in_(("critical", "error", "warning", "incomplete"))).order_by(MediaFile.rel_path)).all()
+    out: list[int] = []
+    for i in range(0, len(files), batch):
+        chunk = files[i:i + batch]
+        fp = {fid: v for fid, _, v in chunk}
+        current: dict[tuple[int, str], int] = {}  # (Datei, Methode) -> neuestes aktuelles Ergebnis
+        for rid, fid, method, rfp in db.execute(
+                select(ScanResult.id, ScanResult.file_id, ScanResult.method, ScanResult.fingerprint_version)
+                .where(ScanResult.file_id.in_(list(fp)), ScanResult.is_current.is_(True))
+                .order_by(ScanResult.finished_at.desc(), ScanResult.id.desc())):
+            if rfp == fp[fid]:
+                current.setdefault((fid, method), rid)
+        findings: dict[int, list[dict]] = {}
+        rids = list(current.values())
+        for j in range(0, len(rids), batch):
+            for row in db.execute(select(
+                    DetectedError.file_id, DetectedError.error_type, DetectedError.severity, DetectedError.description,
+                    DetectedError.raw_message, DetectedError.stream_type, DetectedError.occurrences)
+                    .where(DetectedError.result_id.in_(rids[j:j + batch]))):
+                findings.setdefault(row.file_id, []).append(
+                    {"error_type": row.error_type, "severity": row.severity, "description": row.description,
+                     "raw_message": row.raw_message, "stream_type": row.stream_type, "occurrences": row.occurrences})
+        out += [fid for fid, status, _ in chunk if assess(status, findings.get(fid, []))["category"] in wanted]
+    return out
