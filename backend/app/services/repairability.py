@@ -59,6 +59,8 @@ _DEVIATION = re.compile(r"Abweichung ([+-]?[\d.]+) s")
 _MISSING = re.compile(r"es fehlen ([\d.]+) s")
 _JUMP = re.compile(r"Zeitstempelsprung um ([\d.]+) s")
 _BENIGN_DECODE = ("ignoring pic cod ext",)
+# Nur bei diesen Typen wertet classify_finding die Rohmeldung aus
+RAW_TYPES = {"metadata_inconsistent", "tool_warning", "timestamp_invalid"} | DECODE_TYPES
 
 
 def classify_finding(f: dict) -> tuple[str, str | None]:
@@ -187,10 +189,11 @@ def assess_candidates(db, wanted: set[str], batch: int = 500) -> list[tuple]:
     """(Dateizeile, Bewertung) aller vorhandenen MKV-Dateien, deren Bewertung in `wanted` liegt.
 
     Sammelabfragen statt je Datei – bei großen Bibliotheken sonst zu langsam."""
-    from sqlalchemy import select
+    from sqlalchemy import case, select
 
     from ..models import DetectedError, MediaFile, ScanResult
 
+    raw = case((DetectedError.error_type.in_(RAW_TYPES), DetectedError.raw_message), else_=None).label("raw_message")
     files = db.execute(select(MediaFile.id, MediaFile.status, MediaFile.fingerprint_version, MediaFile.filename,
                               MediaFile.rel_path, MediaFile.library_id, MediaFile.size).where(
         MediaFile.present.is_(True), MediaFile.extension == "mkv",
@@ -211,7 +214,7 @@ def assess_candidates(db, wanted: set[str], batch: int = 500) -> list[tuple]:
         for j in range(0, len(rids), batch):
             for row in db.execute(select(
                     DetectedError.file_id, DetectedError.error_type, DetectedError.severity, DetectedError.description,
-                    DetectedError.raw_message, DetectedError.stream_type, DetectedError.occurrences)
+                    raw, DetectedError.stream_type, DetectedError.occurrences)
                     .where(DetectedError.result_id.in_(rids[j:j + batch]))):
                 findings.setdefault(row.file_id, []).append(
                     {"error_type": row.error_type, "severity": row.severity, "description": row.description,

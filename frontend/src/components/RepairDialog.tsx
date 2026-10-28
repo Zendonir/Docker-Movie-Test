@@ -83,6 +83,12 @@ export function RepairDialog({ title, fileIds, category, salvageDefault = false,
             </div>
             <div className="max-h-72 overflow-y-auto rounded border border-slate-500/30">
               {cands.isLoading && <div className="p-3 text-xs text-slate-500">Liste wird geladen …</div>}
+              {cands.isError && (
+                <div className="p-3 text-xs text-red-500">
+                  Liste konnte nicht geladen werden: {(cands.error as Error).message}
+                  <button className="btn-ghost ml-2 text-xs" onClick={() => cands.refetch()}>Erneut versuchen</button>
+                </div>
+              )}
               {cands.data && open.length === 0 && <div className="p-3 text-xs text-slate-500">Keine offenen Dateien in dieser Liste.</div>}
               {open.map((c) => (
                 <label key={c.id} className="flex cursor-pointer items-start gap-2 border-b border-slate-500/20 px-2 py-1.5 last:border-0">
