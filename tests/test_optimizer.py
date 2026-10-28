@@ -493,3 +493,16 @@ def test_repair_with_track_removal(oclient, opt_env, multi_src):
     assert [(x[0], x[2]) for x in s] == [("video", "und"), ("audio", "ger"), ("subtitles", "ger")]
     item = oclient.get(f"/api/optimizer/jobs/{j['id']}/items").json()["items"][0]
     assert "Spur(en) entfernt" in (item["message"] or "")
+
+
+def test_repair_job_processes_all_files(oclient, opt_env, base_media):
+    media = opt_env["media"]
+    for n in ("a", "b", "c"):
+        mf.copy(base_media["ok"], media / f"{n}.mkv")
+        with open(media / f"{n}.mkv", "ab") as fh:
+            fh.write(b"\x00" * 4096)
+    from conftest import wait_job
+    wait_job(oclient, oclient.post("/api/jobs", json={"task": "incremental", "methods": ["container"]}).json()["id"])
+    j = wait_opt_job(oclient, oclient.post("/api/optimizer/jobs", json={"kind": "repair", "category": "repair"}).json()["id"])
+    items = oclient.get(f"/api/optimizer/jobs/{j['id']}/items").json()["items"]
+    assert j["done_files"] == 3, [(i["state"], i["message"]) for i in items]
