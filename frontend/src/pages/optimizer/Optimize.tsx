@@ -66,7 +66,12 @@ export function OptimizeTab() {
   const [debounced, setDebounced] = useState<OptRules | null>(null);
   const prefilled = useRef<string>("");
 
-  useEffect(() => { if (status.data && !rules) setRules(status.data.last_rules); }, [status.data, rules]);
+  useEffect(() => {
+    if (status.data && !rules) {
+      setRules(status.data.last_rules);
+      if (status.data.last_rules.remux_all) setOnlyMulti(false);  // „Alle remuxen“ gilt auch für Dateien mit einer Audiospur
+    }
+  }, [status.data, rules]);
   useEffect(() => { const t = setTimeout(() => setDebounced(rules), 300); return () => clearTimeout(t); }, [rules]);
 
   const body = { library_id: folder.library_id, directory: folder.directory, recursive: folder.recursive, only_multi_audio: onlyMulti, kind: "remux", rules: debounced, only_changed: onlyChanged, page, page_size: 100 };
