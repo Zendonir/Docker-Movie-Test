@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Pause, Play, Square } from "lucide-react";
+import { Download, FileText, Pause, Play, Square } from "lucide-react";
 import { api, post, qs } from "../../api";
 import { fmtBytes, fmtDate, fmtEta, fmtInt, fmtPct, fmtSpeed, JOB_STATE_LABELS } from "../../format";
 import type { OptJob, OptLiveJob, Paged } from "../../types";
@@ -72,8 +72,31 @@ function JobItems({ jobId }: { jobId: number }) {
   const items = useQuery({ queryKey: ["opt-job", jobId, "items", state, page], queryFn: () => api<Paged<Item>>(`/api/optimizer/jobs/${jobId}/items${qs({ state: state || undefined, page })}`), refetchInterval: 5000 });
   const detail = useQuery({ queryKey: ["opt-item", log], queryFn: () => api<{ log: string | null; plan: unknown; message: string | null }>(`/api/optimizer/items/${log}`), enabled: log != null });
   const j = job.data;
+  const nFailed = j?.item_counts.failed ?? 0;
+  const failed = useQuery({
+    queryKey: ["opt-job", jobId, "failed", nFailed],
+    queryFn: () => api<Paged<Item>>(`/api/optimizer/jobs/${jobId}/items${qs({ state: "failed", page_size: 500 })}`),
+    enabled: nFailed > 0,
+  });
   return (
     <div className="grid gap-4 xl:grid-cols-5">
+      {nFailed > 0 && (
+        <div className="rounded border border-red-500/40 bg-red-500/5 p-3 xl:col-span-5">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-red-500">Fehlerhafte Dateien ({fmtInt(nFailed)})</span>
+            <a className="btn-secondary text-xs" href={`/api/optimizer/jobs/${jobId}/failed.csv`}><Download className="h-4 w-4" />CSV</a>
+          </div>
+          <ul className="max-h-72 space-y-2 overflow-y-auto text-xs">
+            {failed.data?.items.map((it) => (
+              <li key={it.id}>
+                <div className="font-medium [overflow-wrap:anywhere]">{it.file_id ? <Link className="hover:text-sky-500" to={`/dateien/${it.file_id}`}>{it.name}</Link> : it.name}</div>
+                <div className="text-slate-500 [overflow-wrap:anywhere]">{it.message || "ohne Begründung"}
+                  <button className="btn-ghost ml-1 p-0.5 align-middle" title="Protokoll" onClick={() => setLog(it.id)}><FileText className="h-3.5 w-3.5" /></button></div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="xl:col-span-3">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-medium">Dateien</span>

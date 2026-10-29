@@ -129,6 +129,21 @@ export function OptimizeTab() {
             langs={choices?.subtitle_languages ?? []} codecs={choices?.subtitle_codecs ?? []}
             hintEmpty="Leer = alle Untertitel entfernen (außer geschützte Sprachen)." />
         </div>
+        <div className="mt-4 flex flex-col gap-2 text-sm">
+          <label className="flex items-start gap-2">
+            <input type="checkbox" className="mt-1" checked={!!rules.remux_all}
+              onChange={(e) => { setRules({ ...rules, remux_all: e.target.checked }); if (e.target.checked) setOnlyMulti(false); }} />
+            <span><b>Alle Dateien remuxen</b> – auch Dateien ohne zu entfernende Spur neu schreiben
+              (Index und Zeitstempel werden neu aufgebaut). Passt keine Audiospur zu den Regeln, bleiben alle erhalten.</span>
+          </label>
+          <label className="flex items-start gap-2">
+            <input type="checkbox" className="mt-1" checked={!!rules.strip_metadata || !!status.data?.ops.remove_metadata}
+              disabled={!!status.data?.ops.remove_metadata}
+              onChange={(e) => setRules({ ...rules, strip_metadata: e.target.checked })} />
+            <span><b>Metadaten entfernen</b> – Dateititel und Tags (global und je Spur).
+              {!!status.data?.ops.remove_metadata && <span className="text-xs text-slate-500"> Immer aktiv laut Einstellungen.</span>}</span>
+          </label>
+        </div>
         <p className="mt-3 text-xs text-slate-500">
           Geschützte Sprachen (nie vollständig entfernt): {(status.data?.ops.protected_languages ?? []).map((x) => x.toUpperCase()).join(", ") || "keine"} ·
           Ausgabe: {OUTPUT_MODE_HINT[mode]} (änderbar unter „Einstellungen“)
@@ -197,10 +212,10 @@ export function OptimizeTab() {
         <Modal open title="Spuren entfernen" onClose={() => setConfirm(false)}
           footer={<><button className="btn-secondary" onClick={() => setConfirm(false)}>Abbrechen</button><button className={mode.startsWith("replace") ? "btn-danger" : "btn-primary"} disabled={create.isPending} onClick={() => create.mutate()}>Konvertieren</button></>}>
           <div className="space-y-2 text-sm">
-            <p><b>{fmtInt(selectedChanged)}</b> Datei(en) werden mit mkvmerge neu geschrieben (ohne Neucodierung).</p>
+            <p><b>{fmtInt(selectedChanged)}</b> Datei(en) werden mit mkvmerge neu geschrieben (ohne Neucodierung){rules.remux_all ? " – auch ohne zu entfernende Spur" : ""}{rules.strip_metadata || status.data?.ops.remove_metadata ? ", Metadaten werden entfernt" : ""}.</p>
             <p>Voraussichtliche Ersparnis: <Saving bytes={selPred.bytes} compact />{selPred.unknown > 0 && <span className="text-xs text-slate-500"> (für {selPred.unknown} Datei(en) nicht vorhersagbar)</span>}{mode === "output_dir" || mode === "beside" ? <span className="text-xs text-slate-500"> – wird erst frei, wenn die Originale ersetzt werden.</span> : null}</p>
             <p className={mode.startsWith("replace") ? "font-medium text-red-500" : ""}>{OUTPUT_MODE_HINT[mode]}</p>
-            <p className="text-xs text-slate-500">Jede neue Datei wird vor dem Abschluss geprüft. Dateien mit Integritätsfehlern werden übersprungen (abschaltbar).</p>
+            <p className="text-xs text-slate-500">Jede neue Datei wird vor dem Abschluss geprüft. Dateien mit Integritätsfehlern werden übersprungen (abschaltbar unter „Einstellungen“). Schlägt eine Datei fehl, steht sie danach mit Begründung unter „Fehlerhafte Dateien“ im Auftrag.</p>
           </div>
         </Modal>
       )}

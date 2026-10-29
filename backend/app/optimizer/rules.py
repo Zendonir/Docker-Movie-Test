@@ -43,6 +43,8 @@ class TrackRule(BaseModel):
 class Rules(BaseModel):
     audio: TrackRule = Field(default_factory=lambda: TrackRule(languages=["ger"]))
     subtitles: TrackRule = Field(default_factory=lambda: TrackRule(languages=["ger"]))
+    remux_all: bool = False  # auch Dateien ohne zu entfernende Spur neu schreiben
+    strip_metadata: bool = False  # Titel und Tags entfernen (zusätzlich zur Einstellung)
 
 
 @dataclass
@@ -58,6 +60,12 @@ class FileOps:
     protected_languages: list[str] = field(default_factory=lambda: ["ger"])
     verify_output: bool = True
     skip_damaged: bool = True
+
+    def with_rules(self, rules: "Rules") -> "FileOps":
+        """Auftragsbezogene Optionen aus den Regeln übernehmen."""
+        if rules.strip_metadata and not self.remove_metadata:
+            return FileOps(**{**asdict(self), "remove_metadata": True})
+        return self
 
     @classmethod
     def from_settings(cls, s) -> "FileOps":
@@ -172,11 +180,17 @@ def compute_plan(analysis: Analysis, rules: Rules, ops: FileOps) -> RemuxPlan:
             decisions.append(TrackDecision(t.track_id, t.type, True, "Video/sonstige Spuren bleiben immer erhalten"))
     plan = RemuxPlan(decisions, warnings=warnings)
     if analysis.audio and not keep_audio:
-        plan.skip_reason = "Es bliebe keine Audiospur übrig – Datei wird nicht verändert"
-        return plan
+        if not rules.remux_all:
+            plan.skip_reason = "Es bliebe keine Audiospur übrig – Datei wird nicht verändert"
+            return plan
+        for d in plan.decisions:
+            if d.type == "audio":
+                d.keep, d.reason = True, "keine passende Audiospur – alle behalten"
+                keep_audio[d.track_id] = d.reason
+        warnings.append("Audio: keine Spur passt zu den Regeln – alle Audiospuren bleiben erhalten")
     plan.changed = bool(plan.removed)
     predict_savings(plan, analysis)
-    if not plan.changed:
+    if not plan.changed and not (rules.remux_all or rules.strip_metadata):
         plan.skip_reason = "Keine Spur zu entfernen"
         return plan
 

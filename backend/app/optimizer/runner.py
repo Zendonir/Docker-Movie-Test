@@ -219,7 +219,7 @@ async def process_item(item_id: int, kind: str, params: dict, control: ScanContr
                 if m2 is not None:
                     nst = os.stat(source)
                     mark_changed(db, m2, nst.st_size, nst.st_mtime_ns, nst.st_ino)
-                    what = {"remux": "Spuren entfernt", "audio": "Audio konvertiert", "repair": "repariert"}[kind]
+                    what = {"remux": "neu geschrieben", "audio": "Audio konvertiert", "repair": "repariert"}[kind]
                     m2.status_note = f"Durch den MKV-Optimizer verändert ({what}) – erneute Prüfung empfohlen"
     except Skip as exc:
         result.state = "skipped"
@@ -252,8 +252,8 @@ async def _remux(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, sour
     toolset = get_toolset()
     cmd = [toolset.mkvmerge.path or "mkvmerge", "--ui-language", "en_US", "--gui-mode", "-o", temp,
            *global_args(plan, ops), *mkvmerge_args(plan, analysis, ops), source]
-    ctx.log("Entfernt: " + ", ".join(f"#{d['track_id']} ({d['type']})" for d in result.plan["decisions"]
-                                      if not d["keep"]))
+    ctx.log("Entfernt: " + (", ".join(f"#{d['track_id']} ({d['type']})" for d in result.plan["decisions"]
+                                       if not d["keep"]) or "keine Spur (nur Remux)"))
     rc = await _run(ctx, cmd, "Remux", 0.03, 0.9, None)
     if rc not in (0, 1):
         raise Fail(f"mkvmerge ist mit Exit-Code {rc} fehlgeschlagen")
@@ -268,7 +268,12 @@ async def _remux(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, sour
     result.backup_path = info.get("backup")
     result.output_size = os.path.getsize(info["final"])
     saved = st.st_size - result.output_size
-    result.message = f"{len(plan.removed)} Spur(en) entfernt, {saved / 1e6:.1f} MB eingespart"
+    if plan.removed:
+        result.message = f"{len(plan.removed)} Spur(en) entfernt, {saved / 1e6:.1f} MB eingespart"
+    else:
+        result.message = f"Remux ohne Spurentfernung, {saved / 1e6:.1f} MB eingespart"
+    if ops.remove_metadata:
+        result.message += ", Metadaten entfernt"
 
 
 async def _repair(ctx: Ctx, result: ItemResult, mf: MediaFile, lib: Library, source: str, st: os.stat_result,

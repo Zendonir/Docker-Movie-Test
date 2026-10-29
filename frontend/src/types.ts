@@ -326,6 +326,8 @@ export interface TrackRule {
 export interface OptRules {
   audio: TrackRule;
   subtitles: TrackRule;
+  remux_all?: boolean;
+  strip_metadata?: boolean;
 }
 
 export interface OptPlan {

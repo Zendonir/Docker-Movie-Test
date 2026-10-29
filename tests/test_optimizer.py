@@ -556,3 +556,40 @@ def test_repair_accepts_reordered_tracks(oclient, opt_env, tmp_path):
         "kind": "repair", "file_ids": [fid], "repair": {"force": True}}).json()["id"])
     items = oclient.get(f"/api/optimizer/jobs/{j['id']}/items").json()["items"]
     assert j["done_files"] == 1, items[0]["message"]
+
+
+def test_remux_all_and_strip_metadata(oclient, opt_env, multi_src):
+    mf.copy(multi_src, opt_env["media"] / "alles.mkv")
+    analyze(oclient)
+    fid = files_by_name(oclient)["alles.mkv"]["id"]
+    keep_all = {"audio": {"languages": ["ger", "eng"]}, "subtitles": {"languages": ["ger", "eng"]}}
+    # ohne Option: nichts zu tun
+    pv = oclient.post("/api/optimizer/preview", json={"library_id": 1, "kind": "remux", "rules": keep_all}).json()
+    assert fid not in pv["changed_ids"]
+    rules = {**keep_all, "remux_all": True, "strip_metadata": True}
+    pv = oclient.post("/api/optimizer/preview", json={"library_id": 1, "kind": "remux", "rules": rules}).json()
+    assert fid in pv["changed_ids"]
+    j = wait_opt_job(oclient, oclient.post("/api/optimizer/jobs", json={"kind": "remux", "file_ids": [fid], "rules": rules}).json()["id"])
+    items = oclient.get(f"/api/optimizer/jobs/{j['id']}/items").json()["items"]
+    assert j["done_files"] == 1, items
+    assert "Remux ohne Spurentfernung" in items[0]["message"] and "Metadaten entfernt" in items[0]["message"]
+    out = identify_sync(opt_env["output"] / "alles.mkv")
+    assert len(out.audio) == 3 and not out.title
+
+    # keine passende Audiospur: mit „Alle remuxen“ bleiben alle Audiospuren erhalten
+    from app.optimizer.rules import FileOps, Rules, compute_plan
+    plan = compute_plan(identify_sync(multi_src), Rules(audio={"languages": ["fre"]}, subtitles={"languages": []}, remux_all=True),
+                        FileOps(protected_languages=[]))
+    assert not plan.skip_reason and len([d for d in plan.decisions if d.type == "audio" and d.keep]) == 3
+
+    # Fehlerhafte Dateien als CSV
+    from app.database import session_scope
+    from app.models import OptimizerItem
+    with session_scope() as db:
+        db.add(OptimizerItem(job_id=j["id"], file_id=fid, seq=1, state="failed", source_path="/media/kaputt.mkv",
+                             size=2_500_000_000, message="Spuren stimmen nicht überein"))
+        db.commit()
+    r = oclient.get(f"/api/optimizer/jobs/{j['id']}/failed.csv")
+    assert r.status_code == 200
+    text = r.content.decode("utf-8-sig")
+    assert "kaputt.mkv;/media/kaputt.mkv;2,500;Spuren stimmen nicht überein" in text

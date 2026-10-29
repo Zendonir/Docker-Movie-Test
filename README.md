@@ -399,7 +399,13 @@ MKVToolNix und FFmpeg sind im Image enthalten, eine Pfadangabe ist nicht nötig.
 4. Die Liste zeigt je Datei alle Spuren: grün = bleibt, rot durchgestrichen = wird entfernt, ★ = Standardspur.
    **Doppelklick** auf eine Datei zeigt Spurtabelle, Begründung je Spur, Ziel und den exakten mkvmerge-Befehl
    (Ersatz für das Öffnen der mkvmerge-GUI). **Rechtsklick** öffnet ein Kontextmenü zum Markieren.
-5. Dateien markieren → **Konvertieren**. mkvmerge schreibt ohne Neucodierung.
+5. Optional: **Alle Dateien remuxen** schreibt auch Dateien ohne zu entfernende Spur neu (Index und Zeitstempel
+   werden neu aufgebaut; passt keine Audiospur zu den Regeln, bleiben alle erhalten – „Nur Dateien mit mehr als einer
+   Audiospur“ wird dabei abgeschaltet). **Metadaten entfernen** löscht Dateititel und Tags für diesen Auftrag
+   (dauerhaft über *Einstellungen*).
+6. Dateien markieren → **Konvertieren**. mkvmerge schreibt ohne Neucodierung.
+7. Schlägt eine Datei fehl, steht sie im Auftrag unter **Fehlerhafte Dateien** mit Begründung und Protokoll;
+   die Liste gibt es auch als CSV.
 
 **Vorhersage der Ersparnis:** Die Spalte „Ersparnis“ und die Zusammenfassung über der Liste zeigen, wie viel
 Speicher das Entfernen der Spuren voraussichtlich freigibt – für alle Dateien mit Änderungen und für die markierten.

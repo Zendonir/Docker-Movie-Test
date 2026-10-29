@@ -5,7 +5,7 @@ import shlex
 import shutil
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -163,6 +163,7 @@ def preview(body: PreviewIn, db: Session = Depends(get_db)):
             raise HTTPException(400, "Bitte ein Profil wählen")
         profile = _profile_params(p)
     rules = body.rules or Rules()
+    ops = ops.with_rules(rules)
     if body.kind == "remux" and body.rules is not None and s.optimizer_last_rules != rules.model_dump():
         update_settings(db, {"optimizer_last_rules": rules.model_dump()})  # auch für „Reparieren + Spuren entfernen“
     files = service.mkv_files(db, body.library_id, body.directory, body.recursive)
@@ -231,6 +232,7 @@ def command_preview(body: CommandIn, db: Session = Depends(get_db)):
     except fileops.FileOpError as exc:
         dest = f"<{exc}>"
     if body.kind == "remux":
+        ops = ops.with_rules(body.rules or Rules())
         plan = compute_plan(a, body.rules or Rules(), ops)
         cmds = [] if plan.skip_reason else [[ts.mkvmerge.path or "mkvmerge", "-o", dest, *global_args(plan, ops),
                                             *mkvmerge_args(plan, a, ops), mf.path]]
@@ -305,6 +307,7 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
             if rules is None:
                 raise HTTPException(400, "Noch keine Spurregeln festgelegt (MKV-Optimizer → Spuren entfernen)")
             params["rules"] = rules.model_dump()
+            params["ops"] = ops.with_rules(rules).to_dict()
         name = body.name or ("Notreparatur" if opts.salvage else "Reparatur")
         if body.category:
             wanted = {"repair": {"repair"}, "replace": {"replace"},
@@ -320,6 +323,8 @@ def create_job(body: JobIn, db: Session = Depends(get_db)):
     elif body.kind == "remux":
         rules = body.rules or Rules()
         params["rules"] = rules.model_dump()
+        ops = ops.with_rules(rules)
+        params["ops"] = ops.to_dict()
         update_settings(db, {"optimizer_last_rules": rules.model_dump()})
         name = body.name or "Spuren optimieren"
     else:
@@ -412,6 +417,24 @@ def job_items(job_id: int, db: Session = Depends(get_db), state: str | None = No
         "predicted_saved": (it.plan or {}).get("predicted_saved"),
         "predicted_exact": (it.plan or {}).get("predicted_exact", False),
         "finished_at": it.finished_at} for it in rows]}
+
+
+@router.get("/jobs/{job_id}/failed.csv")
+def job_failed_csv(job_id: int, db: Session = Depends(get_db)):
+    """Fehlerhafte Dateien eines Auftrags mit Begründung (Excel-taugliches CSV)."""
+    import csv
+    import io
+
+    _job(db, job_id)
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["Datei", "Pfad", "Größe (GB)", "Begründung"])
+    for it in db.scalars(select(OptimizerItem).where(OptimizerItem.job_id == job_id, OptimizerItem.state == "failed")
+                         .order_by(OptimizerItem.seq)):
+        w.writerow([it.source_path.rsplit("/", 1)[-1], it.source_path, f"{it.size / 1e9:.3f}".replace(".", ","),
+                    it.message or ""])
+    return Response("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="auftrag-{job_id}-fehlerhaft.csv"'})
 
 
 @router.get("/items/{item_id}")
