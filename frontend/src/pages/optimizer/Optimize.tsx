@@ -176,6 +176,12 @@ export function OptimizeTab() {
             <button className="btn-primary" disabled={selectedChanged === 0} onClick={() => setConfirm(true)}><Play className="h-4 w-4" />Konvertieren ({fmtInt(selectedChanged)})</button>
           </div>
         </div>
+        {selected.size > selectedChanged && !rules.remux_all && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs">
+            <span>{fmtInt(selected.size - selectedChanged)} markierte Datei(en) ohne zu entfernende Spur werden nicht bearbeitet.</span>
+            <button className="btn-secondary text-xs" onClick={() => setRules({ ...rules, remux_all: true })}>„Alle Dateien remuxen“ einschalten</button>
+          </div>
+        )}
         <ErrorBox error={preview.error} />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px]">
