@@ -89,6 +89,7 @@ class AnalysisState:
     total: int = 0
     done: int = 0
     analyzed: int = 0
+    cached: int = 0  # unveränderte Dateien mit gespeicherter Analyse
     errors: int = 0
     started: float | None = None
     finished: float | None = None
@@ -122,6 +123,7 @@ async def analyze(library_id: int, rel_dir: str, recursive: bool, force: bool = 
                 inventory_library(db, lib, load_settings(db))
                 files = mkv_files(db, library_id, rel_dir, recursive)
                 have = load_analyses(db, files) if not force else {}
+                STATE.cached = len(have)
                 return [(f.id, f.path, lib.path) for f in files if f.id not in have]
 
         todo = await asyncio.to_thread(prepare)
@@ -154,7 +156,8 @@ async def analyze(library_id: int, rel_dir: str, recursive: bool, force: bool = 
                 last_pub = time.monotonic()
                 bus.publish("optimizer_analysis", STATE.to_dict())
         else:
-            STATE.message = f"Analyse abgeschlossen: {STATE.analyzed} Dateien analysiert" + (
+            STATE.message = (f"Analyse abgeschlossen: {STATE.analyzed + STATE.cached} MKV-Dateien "
+                             f"({STATE.analyzed} neu gelesen, {STATE.cached} unverändert)") + (
                 f", {STATE.errors} nicht lesbar" if STATE.errors else "")
     except Exception as exc:  # pragma: no cover - Fehler sichtbar machen
         log.exception("Analyse fehlgeschlagen")
