@@ -8,6 +8,7 @@ werden die temporären Dateien gelöscht; das Original bleibt unverändert.
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import shlex
@@ -118,6 +119,8 @@ async def _run(ctx: Ctx, cmd: list[str], phase: str, lo: float, hi: float, durat
         raise Fail(res.spawn_error)
     if res.stalled:
         raise Fail(f"{phase}: Werkzeug reagiert nicht mehr")
+    if res.returncode not in (0, None) and any("No space left on device" in line for line in tail):
+        raise fileops.NoSpaceError(f"{phase}: Speicher voll beim Schreiben")
     return res.returncode if res.returncode is not None else -1
 
 
@@ -224,12 +227,19 @@ async def process_item(item_id: int, kind: str, params: dict, control: ScanContr
     except Skip as exc:
         result.state = "skipped"
         result.message = str(exc)
+    except fileops.NoSpaceError as exc:
+        result.state = "nospace"
+        result.message = str(exc)
     except (Fail, fileops.FileOpError) as exc:
         result.state = "cancelled" if control.cancelled else "failed"
         result.message = "Vom Benutzer abgebrochen" if control.cancelled else str(exc)
     except OSError as exc:
-        result.state = "failed"
-        result.message = f"Dateifehler: {exc}"
+        if exc.errno == errno.ENOSPC:
+            result.state = "nospace"
+            result.message = f"Speicher voll beim Schreiben: {exc}"
+        else:
+            result.state = "failed"
+            result.message = f"Dateifehler: {exc}"
     finally:
         fileops.remove_quiet(ctx.temps)
     ctx.log(f"Ergebnis: {result.state}{' – ' + result.message if result.message else ''} "

@@ -198,6 +198,14 @@ class OptimizerWorker:
                 it.message = "Durch Herunterfahren unterbrochen – wird wiederholt"
                 it.temp_paths = []
                 return
+            if res.state == "nospace":
+                it.state = "pending"
+                it.message = res.message
+                it.temp_paths = []
+                job.pause_requested = True
+                job.state = "paused"
+                add_event(job, f"Pausiert – {res.message}. Speicher freigeben und dann „Fortsetzen“.", "error")
+                return
             it.state = res.state
             it.message = res.message
             it.log = res.log

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileText, Pause, Play, Square } from "lucide-react";
+import { Download, FileText, Pause, Play, RotateCcw, Square } from "lucide-react";
 import { api, post, qs } from "../../api";
 import { fmtBytes, fmtDate, fmtEta, fmtInt, fmtPct, fmtSpeed, JOB_STATE_LABELS } from "../../format";
 import type { OptJob, OptLiveJob, Paged } from "../../types";
@@ -16,7 +16,7 @@ const ITEM_CLS: Record<string, string> = { done: "text-emerald-500", failed: "te
 interface Item { id: number; file_id: number | null; name: string; source_path: string; state: string; size: number; output_path: string | null; output_size: number | null; backup_path: string | null; message: string | null; duration_s: number | null; attempts: number; predicted_saved: number | null; predicted_exact: boolean }
 interface JobDetail extends OptJob { item_counts: Record<string, number>; events: { ts: string; level: string; message: string }[] }
 
-function Actions({ job }: { job: { id: number; state: string } }) {
+function Actions({ job }: { job: { id: number; state: string; failed_files?: number } }) {
   const qc = useQueryClient();
   const toast = useToast();
   const act = useMutation({
@@ -24,9 +24,15 @@ function Actions({ job }: { job: { id: number; state: string } }) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["opt-live"] }); qc.invalidateQueries({ queryKey: ["opt-jobs"] }); qc.invalidateQueries({ queryKey: ["opt-job"] }); },
     onError: (e: Error) => toast(e.message, "error"),
   });
-  if (!["queued", "running", "paused"].includes(job.state)) return null;
+  const retry = (job.failed_files ?? 0) > 0 && (
+    <button className="btn-secondary" title="Fehlgeschlagene Dateien erneut einreihen"
+      onClick={() => confirm(`${job.failed_files} fehlgeschlagene Datei(en) erneut versuchen?`) && act.mutate("retry_failed")}>
+      <RotateCcw className="h-4 w-4" />Fehlgeschlagene wiederholen</button>
+  );
+  if (!["queued", "running", "paused"].includes(job.state)) return retry || null;
   return (
-    <div className="flex gap-1">
+    <div className="flex flex-wrap gap-1">
+      {retry}
       {job.state === "paused"
         ? <button className="btn-secondary" onClick={() => act.mutate("resume")}><Play className="h-4 w-4" />Fortsetzen</button>
         : <button className="btn-secondary" onClick={() => act.mutate("pause")}><Pause className="h-4 w-4" />Pausieren</button>}

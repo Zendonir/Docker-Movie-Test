@@ -448,9 +448,26 @@ def item_detail(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/jobs/{job_id}/{action}")
-def job_action(job_id: int, action: Literal["pause", "resume", "cancel"], db: Session = Depends(get_db)):
+def job_action(job_id: int, action: Literal["pause", "resume", "cancel", "retry_failed"],
+               db: Session = Depends(get_db)):
     j = _job(db, job_id)
-    if action == "pause":
+    if action == "retry_failed":
+        items = list(db.scalars(select(OptimizerItem).where(OptimizerItem.job_id == j.id,
+                                                            OptimizerItem.state == "failed")))
+        if not items:
+            raise HTTPException(400, "Keine fehlgeschlagenen Dateien")
+        busy = set(db.scalars(select(OptimizerItem.file_id).join(OptimizerJob).where(
+            OptimizerJob.id != j.id, OptimizerJob.state.in_(optworker.ACTIVE),
+            OptimizerItem.state.in_(("pending", "running")))))
+        items = [it for it in items if it.file_id not in busy]
+        for it in items:
+            it.state, it.message, it.finished_at, it.duration_s = "pending", None, None, None
+        j.failed_files = max(j.failed_files - len(items), 0)
+        j.done_bytes = max(j.done_bytes - sum(it.size or 0 for it in items), 0)
+        j.cancel_requested = j.pause_requested = False
+        j.state, j.finished_at = "queued", None
+        add_event(j, f"{len(items)} fehlgeschlagene Datei(en) erneut eingereiht")
+    elif action == "pause":
         if j.state not in ("queued", "running"):
             raise HTTPException(400, "Auftrag läuft nicht")
         j.pause_requested = True

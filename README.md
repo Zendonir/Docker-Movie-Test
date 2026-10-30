@@ -406,6 +406,13 @@ MKVToolNix und FFmpeg sind im Image enthalten, eine Pfadangabe ist nicht nötig.
 6. Dateien markieren → **Konvertieren**. mkvmerge schreibt ohne Neucodierung.
 7. Schlägt eine Datei fehl, steht sie im Auftrag unter **Fehlerhafte Dateien** mit Begründung und Protokoll;
    die Liste gibt es auch als CSV.
+8. Reicht der Speicherplatz nicht (vor dem Start geprüft oder beim Schreiben), wird der Auftrag **pausiert** –
+   die Datei bleibt offen und zählt nicht als fehlerhaft. Platz schaffen, dann *Fortsetzen*.
+   *Fehlgeschlagene wiederholen* reiht alle fehlgeschlagenen Dateien eines Auftrags erneut ein.
+
+> **ZFS-Snapshots:** Beim Ersetzen von Originalen wird der Platz des alten Films nur frei, wenn kein Snapshot
+> ihn noch referenziert. Mit regelmäßigen Snapshots belegt jeder ersetzte Film vorübergehend doppelt Platz,
+> bis die Snapshots ablaufen oder gelöscht werden.
 
 **Vorhersage der Ersparnis:** Die Spalte „Ersparnis“ und die Zusammenfassung über der Liste zeigen, wie viel
 Speicher das Entfernen der Spuren voraussichtlich freigibt – für alle Dateien mit Änderungen und für die markierten.

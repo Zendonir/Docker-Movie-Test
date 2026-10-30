@@ -25,6 +25,10 @@ class FileOpError(Exception):
     pass
 
 
+class NoSpaceError(FileOpError):
+    """Zu wenig Speicherplatz – der Auftrag wird pausiert statt die Datei als fehlerhaft zu werten."""
+
+
 @dataclass
 class Target:
     final_path: str
@@ -109,7 +113,7 @@ def prepare_dir(target: Target, needed_bytes: int) -> None:
         raise FileOpError(f"Keine Schreibberechtigung in {target.temp_dir}")
     free = shutil.disk_usage(target.temp_dir).free
     if free < needed_bytes:
-        raise FileOpError(f"Zu wenig Speicherplatz in {target.temp_dir}: {free / 1e9:.1f} GB frei, "
+        raise NoSpaceError(f"Zu wenig Speicherplatz in {target.temp_dir}: {free / 1e9:.1f} GB frei, "
                           f"{needed_bytes / 1e9:.1f} GB benötigt")
     if target.backup_path:
         os.makedirs(os.path.dirname(target.backup_path), exist_ok=True)

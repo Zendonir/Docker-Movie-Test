@@ -593,3 +593,43 @@ def test_remux_all_and_strip_metadata(oclient, opt_env, multi_src):
     assert r.status_code == 200
     text = r.content.decode("utf-8-sig")
     assert "kaputt.mkv;/media/kaputt.mkv;2,500;Spuren stimmen nicht überein" in text
+
+
+def test_no_space_pauses_job_and_failed_can_be_retried(oclient, opt_env, multi_src, monkeypatch):
+    import shutil
+    import time
+    from collections import namedtuple
+    from app.optimizer import fileops
+    for n in ("a", "b"):
+        mf.copy(multi_src, opt_env["media"] / f"{n}.mkv")
+    analyze(oclient)
+    ids = [f["id"] for f in files_by_name(oclient).values()]
+    real = shutil.disk_usage
+    Usage = namedtuple("Usage", "total used free")
+    monkeypatch.setattr(fileops.shutil, "disk_usage", lambda p: Usage(1, 1, 0))
+    jid = oclient.post("/api/optimizer/jobs", json={"kind": "remux", "file_ids": ids, "rules": RULES_DTS}).json()["id"]
+    for _ in range(100):
+        j = oclient.get(f"/api/optimizer/jobs/{jid}").json()
+        if j["state"] == "paused":
+            break
+        time.sleep(0.1)
+    assert j["state"] == "paused" and j["failed_files"] == 0 and j["done_files"] == 0, j
+    assert any("Speicher" in e["message"] for e in j["events"])
+    monkeypatch.setattr(fileops.shutil, "disk_usage", real)
+    oclient.post(f"/api/optimizer/jobs/{jid}/resume")
+    j = wait_opt_job(oclient, jid)
+    assert j["state"] == "completed" and j["done_files"] == 2, j
+
+    # Fehlgeschlagene erneut einreihen
+    from app.database import session_scope
+    from app.models import OptimizerItem, OptimizerJob
+    with session_scope() as db:
+        it = db.scalars(__import__("sqlalchemy").select(OptimizerItem).where(OptimizerItem.job_id == jid)).first()
+        it.state, it.message = "failed", "Zu wenig Speicherplatz"
+        job = db.get(OptimizerJob, jid)
+        job.failed_files, job.done_files = 1, 1
+        db.commit()
+    r = oclient.post(f"/api/optimizer/jobs/{jid}/retry_failed")
+    assert r.status_code == 200, r.text
+    j = wait_opt_job(oclient, jid)
+    assert j["failed_files"] == 0 and j["state"] == "completed", j
