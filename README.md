@@ -416,6 +416,9 @@ MKVToolNix und FFmpeg sind im Image enthalten, eine Pfadangabe ist nicht nötig.
 8. Reicht der Speicherplatz nicht (vor dem Start geprüft oder beim Schreiben), wird der Auftrag **pausiert** –
    die Datei bleibt offen und zählt nicht als fehlerhaft. Platz schaffen, dann *Fortsetzen*.
    *Fehlgeschlagene wiederholen* reiht alle fehlgeschlagenen Dateien eines Auftrags erneut ein.
+9. **Überspringen** (in der Karte des laufenden Auftrags) bricht nur die aktuelle Datei ab – Temp-Datei wird
+   gelöscht, Original bleibt unverändert, die Datei steht als „Manuell übersprungen“ im Auftrag – und der Auftrag
+   macht mit der nächsten Datei weiter.
 
 > **ZFS-Snapshots:** Beim Ersetzen von Originalen wird der Platz des alten Films nur frei, wenn kein Snapshot
 > ihn noch referenziert. Mit regelmäßigen Snapshots belegt jeder ersetzte Film vorübergehend doppelt Platz,

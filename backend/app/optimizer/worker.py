@@ -87,6 +87,16 @@ class OptimizerWorker:
     def wake(self) -> None:
         self._wake.set()
 
+    def skip(self, job_id: int, item_id: int | None = None) -> bool:
+        """Bricht die gerade bearbeitete Datei ab; der Auftrag macht mit der nächsten weiter."""
+        cur = self.current
+        if cur is None or self.control is None or cur["job_id"] != job_id:
+            return False
+        if item_id is not None and cur["item_id"] != item_id:
+            return False
+        self.control.cancel("skip")
+        return True
+
     async def _loop(self) -> None:
         while not self._stopping:
             try:
@@ -206,6 +216,9 @@ class OptimizerWorker:
                 job.state = "paused"
                 add_event(job, f"Pausiert – {res.message}. Speicher freigeben und dann „Fortsetzen“.", "error")
                 return
+            if control.cancelled and control.cancel_reason == "skip":
+                res.state, res.message = "skipped", "Manuell übersprungen – Original unverändert"
+                add_event(job, f"Übersprungen: {it.source_path.rsplit('/', 1)[-1]}")
             it.state = res.state
             it.message = res.message
             it.log = res.log

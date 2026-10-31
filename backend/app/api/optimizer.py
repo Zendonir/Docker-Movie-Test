@@ -447,6 +447,15 @@ def item_detail(item_id: int, db: Session = Depends(get_db)):
             "plan": it.plan, "message": it.message, "log": it.log, "duration_s": it.duration_s}
 
 
+@router.post("/jobs/{job_id}/skip")
+async def skip_current(job_id: int, item_id: int | None = None):
+    """Aktuelle Datei überspringen (async: der Abbruch braucht die laufende Ereignisschleife)."""
+    if not _worker().skip(job_id, item_id):
+        raise HTTPException(409, "In diesem Auftrag wird gerade keine Datei bearbeitet")
+    bus.publish("optimizer", {"job": job_id})
+    return {"ok": True}
+
+
 @router.post("/jobs/{job_id}/{action}")
 def job_action(job_id: int, action: Literal["pause", "resume", "cancel", "retry_failed"],
                db: Session = Depends(get_db)):

@@ -633,3 +633,39 @@ def test_no_space_pauses_job_and_failed_can_be_retried(oclient, opt_env, multi_s
     assert r.status_code == 200, r.text
     j = wait_opt_job(oclient, jid)
     assert j["failed_files"] == 0 and j["state"] == "completed", j
+
+
+def test_skip_current_file_continues_with_next(oclient, opt_env, multi_src, monkeypatch):
+    import asyncio
+    import time
+    from app.optimizer import worker as optworker
+    from app.optimizer.runner import ItemResult
+    for n in ("a_haengt", "b_normal"):
+        mf.copy(multi_src, opt_env["media"] / f"{n}.mkv")
+    analyze(oclient)
+    files = files_by_name(oclient)
+    calls = []
+
+    async def fake(item_id, kind, params, control, progress):
+        calls.append(item_id)
+        if len(calls) == 1:  # erste Datei „hängt“
+            while not control.cancelled:
+                await asyncio.sleep(0.05)
+            return ItemResult(state="cancelled", message="abgebrochen")
+        return ItemResult(state="done", message="ok")
+
+    monkeypatch.setattr(optworker, "process_item", fake)
+    ids = [files["a_haengt.mkv"]["id"], files["b_normal.mkv"]["id"]]
+    jid = oclient.post("/api/optimizer/jobs", json={"kind": "remux", "file_ids": ids, "rules": RULES_DTS}).json()["id"]
+    for _ in range(100):
+        live = oclient.get("/api/optimizer/live").json()["jobs"]
+        if live and live[0]["current"]:
+            break
+        time.sleep(0.05)
+    r = oclient.post(f"/api/optimizer/jobs/{jid}/skip", params={"item_id": live[0]["current"]["item_id"]})
+    assert r.status_code == 200, r.text
+    j = wait_opt_job(oclient, jid)
+    assert j["state"] == "completed" and j["skipped_files"] == 1 and j["done_files"] == 1, j
+    items = oclient.get(f"/api/optimizer/jobs/{jid}/items").json()["items"]
+    assert items[0]["state"] == "skipped" and "Manuell übersprungen" in items[0]["message"]
+    assert oclient.post(f"/api/optimizer/jobs/{jid}/skip").status_code == 409

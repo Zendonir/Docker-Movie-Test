@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileText, Pause, Play, RotateCcw, Square } from "lucide-react";
+import { Download, FileText, Pause, Play, RotateCcw, SkipForward, Square } from "lucide-react";
 import { api, post, qs } from "../../api";
 import { fmtBytes, fmtDate, fmtEta, fmtInt, fmtPct, fmtSpeed, JOB_STATE_LABELS } from "../../format";
 import type { OptJob, OptLiveJob, Paged } from "../../types";
@@ -44,6 +44,13 @@ function Actions({ job }: { job: { id: number; state: string; failed_files?: num
 function LiveCard({ j }: { j: OptLiveJob }) {
   const frac = j.total_bytes ? j.processed_bytes / j.total_bytes : 0;
   const c = j.current;
+  const qc = useQueryClient();
+  const toast = useToast();
+  const skip = useMutation({
+    mutationFn: () => post(`/api/optimizer/jobs/${j.id}/skip${qs({ item_id: c?.item_id })}`),
+    onSuccess: () => { toast("Film wird übersprungen – weiter mit dem nächsten", "ok"); qc.invalidateQueries({ queryKey: ["opt-live"] }); },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
   return (
     <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -64,6 +71,12 @@ function LiveCard({ j }: { j: OptLiveJob }) {
             <span className="shrink-0 tabular-nums text-slate-500">{c.paused ? "angehalten · " : ""}{c.phase} · {fmtPct(c.fraction)} · {fmtBytes(c.size)} · noch {fmtEta(c.eta_seconds)}</span>
           </div>
           <div className="mt-1"><ProgressBar value={c.fraction} tone="emerald" /></div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+            <span>läuft seit {fmtEta(c.elapsed)}</span>
+            <button className="btn-secondary text-xs" disabled={skip.isPending}
+              onClick={() => confirm(`„${c.name}“ überspringen? Die Bearbeitung wird abgebrochen, das Original bleibt unverändert.`) && skip.mutate()}>
+              <SkipForward className="h-4 w-4" />Überspringen</button>
+          </div>
         </div>
       )}
     </div>
