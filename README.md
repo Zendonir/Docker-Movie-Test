@@ -273,8 +273,8 @@ Ein **nicht unterstützter Codec** ist ausdrücklich kein Defekt (Status „Nich
 
 **Rückwärts laufende Clusterzeitstempel:** Ein Cluster darf mit einem Block beginnen, der etwas vor dem
 ersten Block des vorigen Clusters liegt (verschachtelte Audio-/Videospuren). Bis Containerprüfer-Version 1
-wurde das als Fehler gemeldet – das betraf fast jeden 4K-Remux. Ab Version 2 gilt ein Rücksprung unter 1 s
-als zulässig (nur noch protokolliert). Bei einem inkrementellen Scan werden betroffene Dateien automatisch
+wurde das als Fehler gemeldet – das betraf fast jeden 4K-Remux. Ab Version 2 gilt ein kleiner Rücksprung
+als zulässig (nur noch protokolliert), ab Version 3 bis 5 s (mkvmerge selbst schreibt solche Cluster). Bei einem inkrementellen Scan werden betroffene Dateien automatisch
 neu geprüft, weil sich die Prüferversion geändert hat.
 
 **Verspätet geschriebene Untertitelpakete (ab Version 3):** Manche Dateien enthalten einzelne PGS-Pakete, die

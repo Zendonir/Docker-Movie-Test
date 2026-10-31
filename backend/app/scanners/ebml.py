@@ -381,7 +381,7 @@ class Options:
     duration_tolerance_s: float = 5.0
     duration_tolerance_pct: float = 2.0
     max_findings: int = 400
-    cluster_back_tolerance: float = 1.0
+    cluster_back_tolerance: float = 5.0
 
 
 @dataclass

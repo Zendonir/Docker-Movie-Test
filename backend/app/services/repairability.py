@@ -41,7 +41,7 @@ ORDER = ("replace", "repair", "optional", "unchecked", "ok")
 # Schwelle, ab der eine fehlende Spielzeit als Datenverlust gilt (Sekunden)
 LOSS_SECONDS = 10.0
 # Clusterzeitstempel dürfen durch verschachtelte Audio-/Videoblöcke geringfügig zurückgehen
-CLUSTER_BACK_TOLERANCE = 1.0
+CLUSTER_BACK_TOLERANCE = 5.0
 
 LOSS_TYPES = {
     "cluster_damaged", "cluster_crc", "read_error", "file_unreadable", "truncated", "packet_corrupt",

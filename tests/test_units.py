@@ -76,3 +76,16 @@ async def test_advancing_progress_is_not_a_stall():
     res = await run_process([sys.executable, "-c", script], ScanControl(), ResourceLimits(io_class="none", stall_timeout=3),
                             on_stdout=lambda line: pos.__setitem__(0, float(line)), progress_value=lambda: pos[0])
     assert not res.stalled and res.returncode == 0
+
+
+async def test_very_long_output_line_is_delivered_whole():
+    """Die Ergebniszeile des EBML-Prüfers enthält bei großen Filmen die Clusterliste (> 1 MB)."""
+    import json
+    import sys
+    from app.scanners.process import ResourceLimits, ScanControl, run_process
+    lines: list[str] = []
+    code = "import json; print('a'); print(json.dumps({'t': 'summary', 'x': 'y' * 5_000_000})); print('b')"
+    res = await run_process([sys.executable, "-c", code], ScanControl(), ResourceLimits(), on_stdout=lines.append)
+    assert res.returncode == 0
+    assert lines[0] == "a" and lines[-1] == "b" and len(lines) == 3
+    assert len(json.loads(lines[1])["x"]) == 5_000_000

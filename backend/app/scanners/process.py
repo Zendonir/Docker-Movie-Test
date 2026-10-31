@@ -128,31 +128,45 @@ class ProcessResult:
         return None
 
 
+MAX_LINE = 256 * 1024 * 1024  # längere Zeilen werden abgeschnitten (Schutz vor unbegrenztem Speicher)
+
+
 async def _pump(stream: asyncio.StreamReader, handler: LineHandler | None, tail: list[str], activity: list[float],
                 tail_size: int = 50) -> None:
-    while True:
-        try:
-            raw = await stream.readline()
-        except ValueError:
-            # Zeile länger als das Pufferlimit: Rest verwerfen, weiterlesen
-            raw = await stream.read(64 * 1024)
-        except asyncio.LimitOverrunError:
-            raw = await stream.read(64 * 1024)
-        if not raw:
-            break
-        activity[0] = time.monotonic()
+    """Liest Zeilen beliebiger Länge (z. B. die Ergebniszeile des EBML-Prüfers mit Clusterliste)."""
+    buf = bytearray()
+
+    async def emit(raw: bytes) -> None:
         line = raw.decode("utf-8", "replace")
         # ffmpeg trennt Statuszeilen teilweise mit \r
         for part in line.replace("\r", "\n").split("\n"):
             if not part:
                 continue
-            tail.append(part)
+            tail.append(part if len(part) <= 4096 else part[:4096] + " …")
             if len(tail) > tail_size:
                 del tail[0]
             if handler is not None:
                 r = handler(part)
                 if asyncio.iscoroutine(r):
                     await r
+
+    while True:
+        chunk = await stream.read(256 * 1024)
+        if not chunk:
+            if buf:
+                await emit(bytes(buf))
+            break
+        activity[0] = time.monotonic()
+        start = len(buf)
+        buf += chunk
+        nl = buf.find(b"\n", start)
+        while nl != -1:
+            await emit(bytes(buf[:nl]))
+            del buf[:nl + 1]
+            nl = buf.find(b"\n")
+        if len(buf) > MAX_LINE:
+            await emit(bytes(buf[:MAX_LINE]))
+            buf.clear()
 
 
 async def run_process(

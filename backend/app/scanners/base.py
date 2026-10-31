@@ -63,7 +63,8 @@ METHOD_LABELS = {
 SCANNER_VERSIONS = {
     Method.QUICK: 1,
     Method.CONTAINER: 3,  # v2: geringfügig rückwärts laufende Clusterzeitstempel sind kein Fehler mehr
-    # v3: verspätet geschriebene Untertitelpakete (einzelne Cluster hinter der Zeitleiste) nur als Hinweis
+    # v3: verspätet geschriebene Untertitelpakete nur als Hinweis, Verschachtelungstoleranz 5 s,
+    #     Ergebniszeilen beliebiger Länge (große Filme)
     Method.FULL: 1,
 }
 
