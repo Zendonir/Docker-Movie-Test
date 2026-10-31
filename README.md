@@ -277,6 +277,13 @@ wurde das als Fehler gemeldet – das betraf fast jeden 4K-Remux. Ab Version 2 g
 als zulässig (nur noch protokolliert). Bei einem inkrementellen Scan werden betroffene Dateien automatisch
 neu geprüft, weil sich die Prüferversion geändert hat.
 
+**Verspätet geschriebene Untertitelpakete (ab Version 3):** Manche Dateien enthalten einzelne PGS-Pakete, die
+weit hinter ihrer Zeit in der Datei stehen (z. B. ein Untertitel für 1:20:37 zwischen den Daten von 1:31:50).
+Das erzeugt einen Mini-Cluster mit „rückwärts springendem“ Zeitstempel, Bild und Ton laufen aber normal weiter.
+Besteht der Rücksprung nur aus Untertitelblöcken und setzt die Zeitleiste danach fort, ist das eine Warnung
+(„Einzelnes Untertitelpaket mit abweichendem Zeitstempel“), kein Fehler – der Film gilt nicht als
+„nicht mehr reparierbar“ und eine Reparatur/ein Remux wird nicht mehr verworfen.
+
 ### Reparaturbewertung und Reparaturlisten
 
 Jede Datei bekommt aus ihren Befunden eine **Empfehlung** (Detailseite, Spalte „Empfehlung“ in allen

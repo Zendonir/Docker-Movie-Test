@@ -149,3 +149,32 @@ def make_multi_mkv(path: Path, seconds: int = 8) -> Path:
     srt_de.unlink()
     srt_en.unlink()
     return path
+
+
+def stray_subtitle_cluster(src: Path, dst: Path, ts_ms: int = 1000) -> Path:
+    """Fügt vor Cluster `index` einen Cluster ein, der nur ein Untertitelpaket mit früherem Zeitstempel enthält
+    (wie ein verspätet geschriebenes PGS-Paket). Die Zeitleiste läuft danach normal weiter."""
+    srt = dst.parent / f".{dst.stem}.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nHallo\n", encoding="utf-8")
+    tmp = dst.parent / f".{dst.stem}.tmp.mkv"
+    subprocess.run(["mkvmerge", "-q", "-o", str(tmp), str(src), str(srt)], check=False)
+    srt.unlink()
+    data = bytearray(tmp.read_bytes())
+    tmp.unlink()
+    sub_track = 3  # Video 1, Audio 2, Untertitel 3
+    payload = b"x"
+    block = bytes([0x80 | sub_track]) + (0).to_bytes(2, "big") + b"\x80" + payload
+    ts = ts_ms.to_bytes(4, "big")
+    body = b"\xe7\x84" + ts + b"\xa3" + bytes([0x80 | len(block)]) + block
+    cluster = b"\x1f\x43\xb6\x75" + bytes([0x80 | len(body)]) + body
+    clusters = cluster_positions(data)
+    assert len(clusters) >= 3, clusters
+    pos = clusters[-2]  # zwischen zwei normalen Clustern gegen Ende
+    data[pos:pos] = cluster
+    # Segmentgröße anpassen (mkvmerge schreibt sie mit 8 Byte)
+    seg = data.find(b"\x18\x53\x80\x67")
+    assert data[seg + 4] == 0x01
+    size = int.from_bytes(data[seg + 5:seg + 12], "big") + len(cluster)
+    data[seg + 5:seg + 12] = size.to_bytes(7, "big")
+    dst.write_bytes(data)
+    return dst

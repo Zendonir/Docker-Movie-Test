@@ -1,5 +1,6 @@
 """EBML/Matroska-Strukturprüfer gegen programmatisch beschädigte Dateien."""
 
+import media_factory as mf
 from app.scanners.ebml import validate
 
 
@@ -60,3 +61,18 @@ def test_timestamp_jump(base_media):
 def test_unknown_codec_is_structurally_fine(base_media):
     res = validate(str(base_media["unknown_codec"]))
     assert not types(res, "error", "critical")
+
+
+def test_stray_subtitle_cluster_is_only_a_warning(base_media, tmp_path):
+    """Ein einzelner Untertitel-Cluster hinter der Zeitleiste (PGS verspätet geschrieben) ist kein Inhaltssprung."""
+    src = mf.stray_subtitle_cluster(base_media["ok"], tmp_path / "stray.mkv")
+    res = validate(str(src))
+    errs = [f for f in res["findings"] if f["error_type"].startswith("timestamp") and f["severity"] in ("error", "critical")]
+    assert not errs, errs
+    warn = [f for f in res["findings"] if f["error_type"] == "timestamp_backwards" and f["severity"] == "warning"]
+    assert warn and "Untertitelpaket" in warn[0]["description"]
+
+    from app.services.repairability import assess
+    # (Index-Hinweise entstehen hier nur durch das Einfügen des Clusters)
+    ts_findings = [f for f in res["findings"] if f["error_type"] != "index_invalid"]
+    assert assess("warning", ts_findings)["category"] == "optional"

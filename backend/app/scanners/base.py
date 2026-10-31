@@ -62,7 +62,8 @@ METHOD_LABELS = {
 # Ergebnisse älterer Versionen gelten bei inkrementellen Scans als veraltet.
 SCANNER_VERSIONS = {
     Method.QUICK: 1,
-    Method.CONTAINER: 2,  # v2: geringfügig rückwärts laufende Clusterzeitstempel sind kein Fehler mehr
+    Method.CONTAINER: 3,  # v2: geringfügig rückwärts laufende Clusterzeitstempel sind kein Fehler mehr
+    # v3: verspätet geschriebene Untertitelpakete (einzelne Cluster hinter der Zeitleiste) nur als Hinweis
     Method.FULL: 1,
 }
 

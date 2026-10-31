@@ -406,6 +406,10 @@ class ValidationState:
     max_block_ts: float | None = None
     max_block_end: float | None = None
     prev_cluster_ts: float | None = None
+    # Großer Rücksprung, der erst beim nächsten Cluster bewertet wird:
+    # {"prev_ts": float, "clusters": [(hpos, ts, set_der_spurtypen)]}
+    pending_back: dict | None = None
+    cur_cluster_types: set = field(default_factory=set)
     doc_type: str | None = None
     suppressed: int = 0
     tracks_seen: bool = False
@@ -690,6 +694,8 @@ class MatroskaValidator:
 
         if self._truncation_pending:
             self._truncated(st.file_size, None)
+        if st.pending_back is not None:
+            self._resolve_backwards(resumed=True)  # Dateiende: Untertitel-Ausreißer am Schluss
 
     def _truncated(self, offset: int, detail: str | None) -> None:
         st = self.state
@@ -1073,8 +1079,49 @@ class MatroskaValidator:
                 return
         self._structure_error_and_resync(reader, err_pos, message, error_type="cluster_damaged", ts_hint=start_ts)
 
+    def _resolve_backwards(self, resumed: bool) -> None:
+        """Bewertet einen zurückgestellten großen Rücksprung.
+
+        Bestehen die zurückspringenden Cluster nur aus Untertitelblöcken und läuft die Zeitleiste danach normal
+        weiter, ist das ein verspätet geschriebenes Untertitelpaket (z. B. PGS) – kein Inhaltssprung."""
+        st = self.state
+        p = st.pending_back
+        st.pending_back = None
+        if p is None:
+            return
+        types = set().union(*(c[2] for c in p["clusters"]))
+        first_pos, first_ts = p["clusters"][0][0], p["clusters"][0][1]
+        if resumed and types and types <= {"subtitle"}:
+            self.add(self._f(
+                "timestamp_backwards", Severity.WARNING,
+                f"Einzelnes Untertitelpaket mit abweichendem Zeitstempel ({first_ts:.3f} s, in der Datei bei "
+                f"{p['prev_ts']:.3f} s) – der Untertitel erscheint ggf. nicht oder zur falschen Zeit, "
+                "Bild und Ton sind nicht betroffen.",
+                byte_offset=first_pos, time_start=first_ts, time_end=p["prev_ts"],
+                time_precision=TimePrecision.EXACT, time_source="Matroska-Clusterzeitstempel", heuristic=True,
+            ), aggregate_key=("cluster_stray_subtitle",))
+            st.prev_cluster_ts = p["prev_ts"]
+            return
+        self.add(self._f(
+            "timestamp_backwards", Severity.ERROR,
+            f"Clusterzeitstempel springt rückwärts von {p['prev_ts']:.3f} s auf {first_ts:.3f} s.",
+            byte_offset=first_pos, time_start=first_ts, time_end=p["prev_ts"],
+            time_precision=TimePrecision.EXACT, time_source="Matroska-Clusterzeitstempel",
+        ), aggregate_key=("cluster_backwards",))
+        st.prev_cluster_ts = p["clusters"][-1][1]
+
     def _check_cluster_ts(self, hpos: int, ts: float) -> None:
         st = self.state
+        st.cur_cluster_types = set()
+        if st.pending_back is not None:
+            if ts + self.opt.cluster_back_tolerance >= st.pending_back["prev_ts"]:
+                self._resolve_backwards(resumed=True)
+            elif len(st.pending_back["clusters"]) < 16:
+                # weiterer Cluster hinter der Zeitleiste – gemeinsam bewerten
+                st.pending_back["clusters"].append((hpos, ts, st.cur_cluster_types))
+                return
+            else:
+                self._resolve_backwards(resumed=False)
         prev_end = st.max_block_end
         if st.prev_cluster_ts is not None and ts + 0.001 < st.prev_cluster_ts \
                 and st.prev_cluster_ts - ts < self.opt.cluster_back_tolerance:
@@ -1088,12 +1135,9 @@ class MatroskaValidator:
                 time_precision=TimePrecision.EXACT, time_source="Matroska-Clusterzeitstempel",
             ), aggregate_key=("cluster_backwards_small",))
         elif st.prev_cluster_ts is not None and ts + 0.001 < st.prev_cluster_ts:
-            self.add(self._f(
-                "timestamp_backwards", Severity.ERROR,
-                f"Clusterzeitstempel springt rückwärts von {st.prev_cluster_ts:.3f} s auf {ts:.3f} s.",
-                byte_offset=hpos, time_start=ts, time_end=st.prev_cluster_ts,
-                time_precision=TimePrecision.EXACT, time_source="Matroska-Clusterzeitstempel",
-            ), aggregate_key=("cluster_backwards",))
+            # Bewertung erst, wenn klar ist, was im Cluster steckt und wie es weitergeht
+            st.pending_back = {"prev_ts": st.prev_cluster_ts, "clusters": [(hpos, ts, st.cur_cluster_types)]}
+            return
         elif prev_end is not None:
             gap = ts - prev_end
             if gap >= self.opt.ts_jump_error:
@@ -1198,6 +1242,7 @@ class MatroskaValidator:
             return True, None
 
         # Zeitstempelprüfungen pro Spur
+        st.cur_cluster_types.add(info.type)
         info.blocks += 1
         if info.first_ts is None:
             info.first_ts = ts
@@ -1290,6 +1335,8 @@ class MatroskaValidator:
             return
         if self._truncation_pending:
             self._truncated(st.file_size, None)
+        if st.pending_back is not None:
+            self._resolve_backwards(resumed=True)  # Dateiende: Untertitel-Ausreißer am Schluss
 
         # Laufzeit laut Info gegen tatsächliche Blockzeitstempel
         if st.info_duration and st.max_block_end is not None:
